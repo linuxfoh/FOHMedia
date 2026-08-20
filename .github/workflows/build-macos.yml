@@ -60,15 +60,15 @@ jobs:
           # Build project and run macOS deployment and custom DMG creation with custom icons
           cmake --build build --config Release --target create_dmg --parallel 2
 
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: FOHMedia-macOS-Binary
-        path: build/*.dmg
-        retention-days: 7
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: FOHMedia-macOS-Binary
+          path: build/*.dmg
+          retention-days: 7
 
-    - name: Release
-      uses: softprops/action-gh-release@v2
-      if: startsWith(github.ref, 'refs/tags/')
-      with:
-        files: build/*.dmg
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: build/*.dmg
