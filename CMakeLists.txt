@@ -250,6 +250,20 @@ endif()
 if(UNIX AND NOT APPLE)
     configure_file(FOHMedia.desktop.in FOHMedia.desktop @ONLY)
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/FOHMedia.desktop DESTINATION share/applications)
+
+    # Resolve qmake location to pass to linuxdeployqt
+    get_target_property(QMAKE_EXECUTABLE Qt6::qmake IMPORTED_LOCATION)
+
+    # Add custom target for generating tar.gz using linuxdeployqt
+    add_custom_target(create_tar_gz
+        DEPENDS FOHMedia
+        COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/scripts/linux/package_linux_tar_gz.sh"
+                "$<TARGET_FILE:FOHMedia>"
+                "${CMAKE_BINARY_DIR}/FOHMedia-1.0.0-linux.tar.gz"
+                "${CMAKE_CURRENT_SOURCE_DIR}"
+                "${QMAKE_EXECUTABLE}"
+        COMMENT "Creating standalone tar.gz for Linux with linuxdeployqt..."
+    )
 endif()
 
 # --- Testing ---
@@ -310,12 +324,3 @@ elseif (APPLE)
     set(CPACK_DMG_VOLUME_ICON "${CMAKE_CURRENT_SOURCE_DIR}/Media/FOHMedia.icns")
     include(CPack)
 endif()
-
-# --- Custom CI Triggers ---
-# This target allows you to trigger the Mac build directly from CLion's run configurations
-add_custom_target(PushToMacCI
-    COMMAND sh -c "git push -f github `git commit-tree HEAD^{tree} -m 'Mac CI/CD Build'`:refs/heads/main"
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    VERBATIM
-    COMMENT "Pushing flattened commit to GitHub for macOS CI build..."
-)
