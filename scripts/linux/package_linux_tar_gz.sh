@@ -17,7 +17,7 @@ trap 'rm -rf "$STAGING_DIR"' EXIT
 APP_DIR="$STAGING_DIR/FOHMedia-Linux"
 mkdir -p "$APP_DIR/usr/bin"
 mkdir -p "$APP_DIR/usr/share/applications"
-mkdir -p "$APP_DIR/usr/share/icons/hicolor/256x256/apps"
+mkdir -p "$APP_DIR/usr/share/icons/hicolor/192x192/apps"
 
 echo "Staging AppDir contents at $APP_DIR..."
 
@@ -28,27 +28,44 @@ cp "$EXE_PATH" "$APP_DIR/usr/bin/FOHMedia"
 cp "${SOURCE_DIR}/Media/logo0.png" "$APP_DIR/usr/bin/" 2>/dev/null || true
 cp "${SOURCE_DIR}/Media/BebasNeue-Regular.ttf" "$APP_DIR/usr/bin/" 2>/dev/null || true
 
-# Copy desktop file and icon
-cp "${SOURCE_DIR}/FOHMedia.desktop" "$APP_DIR/usr/share/applications/" 2>/dev/null || true
-cp "${SOURCE_DIR}/Media/logo0.png" "$APP_DIR/usr/share/icons/hicolor/256x256/apps/FOHMedia.png" 2>/dev/null || true
+# Use 192x192 icon to comply with linuxdeploy icon size validation
+mkdir -p "$APP_DIR/usr/share/icons/hicolor/192x192/apps"
+cp "${SOURCE_DIR}/Media/logo0_192.png" "$APP_DIR/usr/share/icons/hicolor/192x192/apps/FOHMedia.png" 2>/dev/null || true
 
-LINUXDEPLOYQT_URL="https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
-LINUXDEPLOYQT_BIN="$STAGING_DIR/linuxdeployqt.AppImage"
-
-echo "Downloading linuxdeployqt..."
-wget -q -c -O "$LINUXDEPLOYQT_BIN" "$LINUXDEPLOYQT_URL"
-chmod a+x "$LINUXDEPLOYQT_BIN"
-
-echo "Running linuxdeployqt..."
-# We export NO_STRIP=1 in case stripping fails, and use -unsupported-allow-new-glibc for newer Ubuntu versions
-export NO_STRIP=1
-
-# linuxdeployqt will bundle the libraries into the AppDir.
-if [ -n "$QMAKE_PATH" ]; then
-    "$LINUXDEPLOYQT_BIN" "$APP_DIR/usr/bin/FOHMedia" -qmake="$QMAKE_PATH" -unsupported-allow-new-glibc -qmldir="${SOURCE_DIR}/qml"
+# Copy desktop file
+if [ -f "${EXE_PATH%/*}/FOHMedia.desktop" ]; then
+    cp "${EXE_PATH%/*}/FOHMedia.desktop" "$APP_DIR/usr/share/applications/" 2>/dev/null || true
 else
-    "$LINUXDEPLOYQT_BIN" "$APP_DIR/usr/bin/FOHMedia" -unsupported-allow-new-glibc -qmldir="${SOURCE_DIR}/qml"
+    cp "${SOURCE_DIR}/FOHMedia.desktop" "$APP_DIR/usr/share/applications/" 2>/dev/null || true
 fi
+
+LINUXDEPLOY_URL="https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+LINUXDEPLOY_QT_URL="https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+
+LINUXDEPLOY_BIN="$STAGING_DIR/linuxdeploy-x86_64.AppImage"
+LINUXDEPLOY_QT_BIN="$STAGING_DIR/linuxdeploy-plugin-qt-x86_64.AppImage"
+
+echo "Downloading linuxdeploy and qt plugin..."
+wget -q -c -O "$LINUXDEPLOY_BIN" "$LINUXDEPLOY_URL"
+wget -q -c -O "$LINUXDEPLOY_QT_BIN" "$LINUXDEPLOY_QT_URL"
+chmod a+x "$LINUXDEPLOY_BIN" "$LINUXDEPLOY_QT_BIN"
+
+echo "Extracting linuxdeploy tools to avoid FUSE issues..."
+cd "$STAGING_DIR"
+"$LINUXDEPLOY_BIN" --appimage-extract >/dev/null
+mv squashfs-root linuxdeploy-ext
+"$LINUXDEPLOY_QT_BIN" --appimage-extract >/dev/null
+mv squashfs-root linuxdeploy-plugin-qt-ext
+cd - >/dev/null
+
+export PATH="$STAGING_DIR/linuxdeploy-ext/usr/bin:$STAGING_DIR/linuxdeploy-plugin-qt-ext/usr/bin:$PATH"
+
+echo "Running linuxdeploy..."
+# We use EXTRA_QT_PLUGINS to include multimedia explicitly
+export EXTRA_QT_PLUGINS="multimedia;qml"
+export QML_SOURCES_PATHS="${SOURCE_DIR}/qml"
+
+linuxdeploy --appdir "$APP_DIR" -e "$APP_DIR/usr/bin/FOHMedia" -d "$APP_DIR/usr/share/applications/FOHMedia.desktop" -i "$APP_DIR/usr/share/icons/hicolor/192x192/apps/FOHMedia.png" --plugin qt
 
 echo "Creating compressed tar.gz at $OUTPUT_TAR..."
 rm -f "$OUTPUT_TAR"
