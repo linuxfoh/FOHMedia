@@ -3,9 +3,11 @@ name: Build macOS
 on:
   push:
     branches: [ "main", "master" ]
+    tags:
+      - 'v*'
   pull_request:
     branches: [ "main", "master" ]
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch: {} # Allow manual trigger
 
 jobs:
   build:
@@ -64,3 +66,9 @@ jobs:
           name: FOHMedia-macOS-Binary
           path: build/*.dmg
           retention-days: 7
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: build/*.dmg
