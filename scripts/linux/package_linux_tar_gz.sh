@@ -61,6 +61,9 @@ cd - >/dev/null
 export PATH="$STAGING_DIR/linuxdeploy-ext/usr/bin:$STAGING_DIR/linuxdeploy-plugin-qt-ext/usr/bin:$PATH"
 
 echo "Running linuxdeploy..."
+if [ -n "$QMAKE_PATH" ]; then
+    export QMAKE="$QMAKE_PATH"
+fi
 # We use EXTRA_QT_PLUGINS to include multimedia explicitly
 export EXTRA_QT_PLUGINS="multimedia;qml"
 export QML_SOURCES_PATHS="${SOURCE_DIR}/qml"
