@@ -22,7 +22,7 @@ jobs:
       run: |
         sudo apt-get update
         # Install Protobuf and OpenGL/X11 dependencies needed by Qt on Linux
-        sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-render0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 libprotobuf-dev protobuf-compiler
+        sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-render0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 libprotobuf-dev protobuf-compiler libpulse-dev libpulse0
 
     - name: Set up Python (for aqtinstall)
       uses: actions/setup-python@v5
