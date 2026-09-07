@@ -47,6 +47,11 @@ if [ -f "$STAGING_DIR/.VolumeIcon.icns" ]; then
     chmod 644 "$STAGING_DIR/.VolumeIcon.icns"
 fi
 
+echo "Re-signing app bundle after modifications to ensure Gatekeeper does not reject it as damaged..."
+xattr -cr "$STAGING_APP"
+codesign --force --deep -s - "$STAGING_APP"
+
+
 rm -f "$OUTPUT_DMG"
 echo "Creating compressed UDZO DMG at $OUTPUT_DMG..."
 hdiutil create -volname "$VOL_NAME" -srcfolder "$STAGING_DIR" -ov -format UDZO "$OUTPUT_DMG"
