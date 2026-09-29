@@ -158,7 +158,7 @@ Rectangle {
             horizontalAlignment: root.getHAlign(layoutProps.alignment)
             verticalAlignment: root.getVAlign(layoutProps.alignment)
             wrapMode: TextEdit.WordWrap
-            textFormat: TextEdit.AutoText
+            textFormat: TextEdit.PlainText
             renderType: root.textRenderType
             readOnly: false
             selectByMouse: true
@@ -205,7 +205,9 @@ Rectangle {
             horizontalAlignment: textEditItem.horizontalAlignment
             verticalAlignment: textEditItem.verticalAlignment
             wrapMode: Text.WordWrap
-            textFormat: Text.AutoText
+            textFormat: Text.PlainText
+            lineHeight: 1.0
+            lineHeightMode: Text.ProportionalHeight
             renderType: root.textRenderType
             renderTypeQuality: Text.HighRenderTypeQuality
         }
@@ -228,7 +230,9 @@ Rectangle {
             horizontalAlignment: root.getHAlign(layoutProps.nextAlignment)
             verticalAlignment: root.getVAlign(layoutProps.nextAlignment)
             wrapMode: Text.WordWrap
-            textFormat: Text.AutoText
+            textFormat: Text.PlainText
+            lineHeight: 1.0
+            lineHeightMode: Text.ProportionalHeight
             renderType: root.textRenderType
             renderTypeQuality: Text.HighRenderTypeQuality
             visible: root.renderText && root.nextSlideText !== "" && layoutProps.hasNextText === true
@@ -272,7 +276,9 @@ Rectangle {
                     horizontalAlignment: root.getHAlign(timerData.alignment)
                     verticalAlignment: root.getVAlign(timerData.alignment)
                     wrapMode: Text.WordWrap
-                    textFormat: Text.AutoText
+                    textFormat: Text.PlainText
+                    lineHeight: 1.0
+                    lineHeightMode: Text.ProportionalHeight
                     renderType: root.textRenderType
                     renderTypeQuality: Text.HighRenderTypeQuality
                 }
@@ -329,7 +335,9 @@ Rectangle {
                             horizontalAlignment: root.getHAlign(elementData.alignment)
                             verticalAlignment: root.getVAlign(elementData.alignment)
                             wrapMode: Text.WordWrap
-                            textFormat: Text.AutoText
+                            textFormat: Text.PlainText
+                            lineHeight: 1.0
+                            lineHeightMode: Text.ProportionalHeight
                             renderType: root.textRenderType
                             renderTypeQuality: Text.HighRenderTypeQuality
                         }
