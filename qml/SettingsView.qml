@@ -99,16 +99,48 @@ Item {
     }
 
     ColumnLayout {
-        anchors.left: parent.left
-        spacing: 20
-        width: Math.min(parent.width * 0.8, 600)
+        anchors.fill: parent
+        anchors.margins: 20
+        spacing: 15
 
-        Label {
-            text: "Global Settings"
-            font.pixelSize: Qt.platform.os === "osx" || Qt.platform.os === "macos" ? 14 : 16
-            font.bold: true
-            Layout.alignment: Qt.AlignHCenter
+        TabBar {
+            id: tabBar
+            Layout.fillWidth: true
+
+            TabButton {
+                text: qsTr("Global Settings")
+                width: implicitWidth
+                leftPadding: 25
+                rightPadding: 25
+                topPadding: 12
+                bottomPadding: 12
+            }
+            TabButton {
+                text: qsTr("Lyrics Settings")
+                width: implicitWidth
+                leftPadding: 25
+                rightPadding: 25
+                topPadding: 12
+                bottomPadding: 12
+            }
         }
+
+        StackLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            currentIndex: tabBar.currentIndex
+
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                contentWidth: availableWidth
+                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+                ColumnLayout {
+                    width: Math.min(parent.width * 0.9, 800)
+                    Layout.alignment: Qt.AlignTop | Qt.AlignLeft
+                    spacing: 20
 
         Label {
             text: "Transitions";
@@ -276,12 +308,21 @@ Item {
             }
         }
 
-        Label {
-            text: "Lyrics Settings"
-            font.pixelSize: Qt.platform.os === "osx" || Qt.platform.os === "macos" ? 14 : 16
-            font.bold: true
-            Layout.alignment: Qt.AlignHCenter
-        }
+        
+                }
+            }
+
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                contentWidth: availableWidth
+                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+                ColumnLayout {
+                    width: Math.min(parent.width * 0.9, 800)
+                    Layout.alignment: Qt.AlignTop | Qt.AlignLeft
+                    spacing: 20
 
         Label {
             text: "Component Colors";
@@ -487,6 +528,10 @@ Item {
                 onClicked: {
                     blankColorDialog.selectedColor = AppContext.settingsManager.blankComponentColor
                     blankColorDialog.open()
+                }
+            }
+        }
+    
                 }
             }
         }
