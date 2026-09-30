@@ -663,6 +663,33 @@ void ShowViewModel::newShow(const QString& title) {
     }
 }
 
+void ShowViewModel::newShowWithDetails(const QString& title, const QDate& date, const QString& leaderName) {
+    QString safeTitle = title;
+    safeTitle.replace(QRegularExpression("[^a-zA-Z0-9 -]"), "");
+    if (safeTitle.isEmpty()) safeTitle = "Untitled";
+    
+    QString filename = safeTitle.replace(" ", "_") + ".fohs";
+    QString path = Library::uniqueDestPath(Library::showsDir(), filename);
+    
+    Show* show = new Show(title, this);
+    show->setSourceFile(path);
+    show->setServiceDate(date);
+    show->setLeaderName(leaderName);
+    ShowSerializer::saveShowToFile(show);
+    
+    int startRow = rowCount();
+    beginInsertRows(QModelIndex(), startRow, startRow);
+    m_shows.append(show);
+    connectShow(show);
+    endInsertRows();
+    emit showsChanged();
+    emit loadedShowsChanged();
+    
+    if (m_activeIndex == -1) {
+        setActiveIndex(startRow);
+    }
+}
+
 QVariantList ShowViewModel::getShowsWithDecks() const {
     QVariantList list;
     auto shows = Library::listShowsWithTitles();

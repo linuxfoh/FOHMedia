@@ -16,6 +16,18 @@ Item {
         AppContext.lyricsModel.reloadCurrentDeck()
     }
 
+    function getArrangementPrefix() {
+        var tmpl = AppContext.settingsManager.arrangementPrefix;
+        if (!tmpl) return "";
+        var d = AppContext.showModel.activeShow ? AppContext.showModel.activeShow.serviceDate : new Date();
+        var leader = AppContext.showModel.activeShow ? AppContext.showModel.activeShow.leaderName : "";
+        var yyyy = Qt.formatDate(d, "yyyy");
+        var mm = Qt.formatDate(d, "MM");
+        var dd = Qt.formatDate(d, "dd");
+        var res = tmpl.replace("<YYYY>", yyyy).replace("<MM>", mm).replace("<DD>", dd).replace("<LEADER-NAME>", leader);
+        return res.trim() + " ";
+    }
+
     Dialog {
         id: newArrangementDialog
         title: "New Arrangement"
@@ -42,6 +54,7 @@ Item {
             }
         }
         onOpened: {
+            newArrangementField.text = getArrangementPrefix()
             newArrangementField.forceActiveFocus()
         }
     }
@@ -74,6 +87,7 @@ Item {
             }
         }
         onOpened: {
+            cloneArrangementField.text = getArrangementPrefix()
             cloneArrangementField.forceActiveFocus()
         }
     }

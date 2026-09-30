@@ -308,7 +308,85 @@ Item {
             }
         }
 
-        
+        Label {
+            text: "Service Options";
+            font.bold: true;
+            color: palette.highlight;
+            padding: 10;
+            bottomPadding: 0
+        }
+
+        GroupBox {
+            Layout.fillWidth: true
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 8
+
+                Label {
+                    text: "Leader Names:"
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    TextField {
+                        id: newLeaderField
+                        placeholderText: "New Leader Name"
+                        Layout.fillWidth: true
+                        onAccepted: addLeaderBtn.clicked()
+                    }
+                    Button {
+                        id: addLeaderBtn
+                        text: "Add"
+                        onClicked: {
+                            if (newLeaderField.text.trim() !== "") {
+                                AppContext.settingsManager.addLeaderName(newLeaderField.text.trim())
+                                newLeaderField.text = ""
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 150
+                    color: palette.alternateBase
+                    border.color: palette.mid
+                    border.width: 1
+                    radius: 4
+
+                    ListView {
+                        anchors.fill: parent
+                        anchors.margins: 2
+                        model: AppContext.settingsManager.leaderNames
+                        clip: true
+
+                        delegate: Rectangle {
+                            width: ListView.view.width
+                            height: 30
+                            color: index % 2 === 0 ? "transparent" : palette.base
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 4
+
+                                Label {
+                                    text: modelData
+                                    Layout.fillWidth: true
+                                }
+                                ToolButton {
+                                    text: "❌"
+                                    font.pixelSize: 10
+                                    onClicked: {
+                                        AppContext.settingsManager.removeLeaderName(modelData)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
                 }
             }
 
@@ -323,6 +401,38 @@ Item {
                     width: Math.min(parent.width * 0.9, 800)
                     Layout.alignment: Qt.AlignTop | Qt.AlignLeft
                     spacing: 20
+
+        Label {
+            text: "Arrangements";
+            font.bold: true;
+            color: palette.highlight;
+            padding: 10;
+        }
+
+        GroupBox {
+            Layout.fillWidth: true
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 8
+
+                Label {
+                    text: "Arrangement Name Prefix Template:"
+                }
+
+                TextField {
+                    Layout.fillWidth: true
+                    text: AppContext.settingsManager.arrangementPrefix
+                    onTextEdited: AppContext.settingsManager.arrangementPrefix = text
+                }
+
+                Label {
+                    text: "Available tags: <YYYY>, <MM>, <DD>, <LEADER-NAME>"
+                    font.pixelSize: 11
+                    color: palette.placeholderText
+                }
+            }
+        }
 
         Label {
             text: "Component Colors";

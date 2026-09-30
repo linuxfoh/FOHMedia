@@ -3,6 +3,7 @@
 #include <QAbstractListModel>
 #include <QString>
 #include <QList>
+#include <QDate>
 
 class SlideDeck;
 
@@ -13,6 +14,9 @@ class Show : public QAbstractListModel {
     Q_PROPERTY(QString sourceFile READ sourceFile WRITE setSourceFile)
     Q_PROPERTY(QString defaultTransitionType READ defaultTransitionType WRITE setDefaultTransitionType NOTIFY defaultTransitionTypeChanged)
     Q_PROPERTY(int defaultTransitionDurationMs READ defaultTransitionDurationMs WRITE setDefaultTransitionDurationMs NOTIFY defaultTransitionDurationMsChanged)
+    Q_PROPERTY(QDate serviceDate READ serviceDate WRITE setServiceDate NOTIFY serviceDateChanged)
+    Q_PROPERTY(QString leaderName READ leaderName WRITE setLeaderName NOTIFY leaderNameChanged)
+
 
 public:
     enum DeckRoles {
@@ -73,6 +77,12 @@ public:
     int defaultTransitionDurationMs() const { return m_defaultTransitionDurationMs; }
     void setDefaultTransitionDurationMs(int duration);
 
+    QDate serviceDate() const { return m_serviceDate; }
+    void setServiceDate(const QDate& date);
+
+    QString leaderName() const { return m_leaderName; }
+    void setLeaderName(const QString& leaderName);
+
 signals:
     void nameChanged(const QString& name);
     void deckCountChanged();
@@ -85,6 +95,8 @@ signals:
     void deckReplaced(int index);
     void defaultTransitionTypeChanged(const QString& type);
     void defaultTransitionDurationMsChanged(int duration);
+    void serviceDateChanged(const QDate& date);
+    void leaderNameChanged(const QString& leaderName);
 
 private:
     QString m_name = QStringLiteral("Untitled Show");
@@ -93,4 +105,6 @@ private:
     // --- Transition Settings ---
     QString m_defaultTransitionType = "Cut";
     int m_defaultTransitionDurationMs = 0;
+    QDate m_serviceDate = QDate::currentDate();
+    QString m_leaderName;
 };

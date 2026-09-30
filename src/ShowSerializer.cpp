@@ -40,6 +40,11 @@ Show* ShowSerializer::loadFohsFile(const QString& filePath, QObject* parentObj) 
         if (root.contains("show_title")) show->setName(root["show_title"].toString());
         if (root.contains("default_transition_type")) show->setDefaultTransitionType(root["default_transition_type"].toString());
         if (root.contains("default_transition_duration")) show->setDefaultTransitionDurationMs(root["default_transition_duration"].toInt());
+        if (root.contains("service_date")) {
+            QDate date = QDate::fromString(root["service_date"].toString(), Qt::ISODate);
+            if (date.isValid()) show->setServiceDate(date);
+        }
+        if (root.contains("leader_name")) show->setLeaderName(root["leader_name"].toString());
         
         if (root.contains("decks") && root["decks"].isArray()) {
             QDir baseDir(Library::slidedecksDir());
@@ -331,6 +336,8 @@ void ShowSerializer::saveShowToFile(Show* show) {
     rootObj["show_title"] = show->name();
     rootObj["default_transition_type"] = show->defaultTransitionType();
     rootObj["default_transition_duration"] = show->defaultTransitionDurationMs();
+    rootObj["service_date"] = show->serviceDate().toString(Qt::ISODate);
+    rootObj["leader_name"] = show->leaderName();
 
     QJsonArray decksArr;
     for (int i = 0; i < show->deckCount(); ++i) {

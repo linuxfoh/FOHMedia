@@ -13,6 +13,7 @@ class ShowViewModel : public QAbstractListModel {
     QML_ELEMENT
     Q_PROPERTY(QString showName READ showName WRITE setShowName NOTIFY showNameChanged)
     Q_PROPERTY(bool hasShow READ hasShow NOTIFY showNameChanged)
+    Q_PROPERTY(Show* activeShow READ activeShow NOTIFY activeIndexChanged)
     Q_PROPERTY(QList<QObject*> shows READ showsList NOTIFY showsChanged)
     Q_PROPERTY(QVariantList loadedShows READ loadedShows NOTIFY loadedShowsChanged)
     Q_PROPERTY(int activeIndex READ activeIndex WRITE setActiveIndex NOTIFY activeIndexChanged)
@@ -67,6 +68,7 @@ public slots:
     Q_INVOKABLE QVariantList getAvailableShows() const;
     Q_INVOKABLE QVariantList getAvailableDecks() const;
     Q_INVOKABLE void newShow(const QString& title);
+    Q_INVOKABLE void newShowWithDetails(const QString& title, const QDate& date, const QString& leaderName);
     Q_INVOKABLE QVariantList getShowsWithDecks() const;
     Q_INVOKABLE void removeShow(const QString& filePath);
     Q_INVOKABLE void unloadShow(const QString& showName);

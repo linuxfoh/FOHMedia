@@ -16,6 +16,9 @@ class SettingsManager : public QObject {
     Q_PROPERTY(QVariantList activeControllers READ activeControllers WRITE setActiveControllers NOTIFY activeControllersChanged)
     Q_PROPERTY(bool disableHwVideo READ disableHwVideo WRITE setDisableHwVideo NOTIFY disableHwVideoChanged)
     Q_PROPERTY(bool disableSplash READ disableSplash WRITE setDisableSplash NOTIFY disableSplashChanged)
+    Q_PROPERTY(QString arrangementPrefix READ arrangementPrefix WRITE setArrangementPrefix NOTIFY arrangementPrefixChanged)
+    Q_PROPERTY(QStringList leaderNames READ leaderNames WRITE setLeaderNames NOTIFY leaderNamesChanged)
+
     // Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY activeLayoutChanged)
     Q_PROPERTY(QColor introComponentColor READ introComponentColor WRITE setIntroComponentColor NOTIFY lyricsColorChanged)
     Q_PROPERTY(QColor verseComponentColor READ verseComponentColor WRITE setVerseComponentColor NOTIFY lyricsColorChanged)
@@ -58,6 +61,15 @@ public:
 
     QVariantList activeControllers() const { return m_activeControllers; }
     void setActiveControllers(const QVariantList& controllers);
+
+    QString arrangementPrefix() const { return m_arrangementPrefix; }
+    void setArrangementPrefix(const QString& prefix);
+
+    QStringList leaderNames() const { return m_leaderNames; }
+    void setLeaderNames(const QStringList& names);
+    Q_INVOKABLE void addLeaderName(const QString& name);
+    Q_INVOKABLE void removeLeaderName(const QString& name);
+
 
     QJsonArray getTimersJson() const { return m_timersJson; }
     void setTimersJson(const QJsonArray& timers);
@@ -116,6 +128,8 @@ signals:
     void activeControllersChanged();
     void disableHwVideoChanged();
     void disableSplashChanged();
+    void arrangementPrefixChanged();
+    void leaderNamesChanged();
     void settingsLoaded();
     void lyricsColorChanged();
 
@@ -130,6 +144,8 @@ private:
     bool m_disableSplash = false;
     QVariantList m_activeControllers;
     QJsonArray m_timersJson;
+    QString m_arrangementPrefix;
+    QStringList m_leaderNames;
 
     QColor m_introComponentColor = QColor("#BDB76B");
     QColor m_verseComponentColor = QColor("#0072C6");

@@ -196,3 +196,17 @@ void Show::setDefaultTransitionDurationMs(int duration) {
         emit defaultTransitionDurationMsChanged(m_defaultTransitionDurationMs);
     }
 }
+
+void Show::setServiceDate(const QDate& date) {
+    if (m_serviceDate != date) {
+        m_serviceDate = date;
+        emit serviceDateChanged(m_serviceDate);
+    }
+}
+
+void Show::setLeaderName(const QString& leaderName) {
+    if (m_leaderName != leaderName) {
+        m_leaderName = leaderName;
+        emit leaderNameChanged(m_leaderName);
+    }
+}

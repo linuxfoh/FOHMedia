@@ -31,6 +31,8 @@ void SettingsManager::applyDefaults() {
     m_disableSplash = false;
     m_activeControllers.clear();
     m_timersJson = QJsonArray();
+    m_arrangementPrefix = "<YYYY>-<MM>-<DD> <LEADER-NAME>";
+    m_leaderNames.clear();
 }
 
 void SettingsManager::loadSettings() {
@@ -74,6 +76,17 @@ void SettingsManager::loadSettings() {
         }
         if (root.contains("disableSplash")) {
             setDisableSplash(root["disableSplash"].toBool());
+        }
+        if (root.contains("arrangementPrefix")) {
+            setArrangementPrefix(root["arrangementPrefix"].toString());
+        }
+        if (root.contains("leaderNames") && root["leaderNames"].isArray()) {
+            QStringList names;
+            QJsonArray arr = root["leaderNames"].toArray();
+            for (const QJsonValue& val : arr) {
+                names.append(val.toString());
+            }
+            setLeaderNames(names);
         }
         auto loadColor = [&root](const QString& key, std::function<void(const QColor&)> setter) {
             if (root.contains(key)) {
@@ -126,6 +139,12 @@ void SettingsManager::saveSettings() {
     root["screens"] = m_screensJson;
     root["disableHwVideo"] = m_disableHwVideo;
     root["disableSplash"] = m_disableSplash;
+    root["arrangementPrefix"] = m_arrangementPrefix;
+    QJsonArray leadersArray;
+    for (const QString& name : m_leaderNames) {
+        leadersArray.append(name);
+    }
+    root["leaderNames"] = leadersArray;
     root["lyricsIntroComponentColor"] = m_introComponentColor.name(QColor::HexArgb);
     root["lyricsVerseComponentColor"] = m_verseComponentColor.name(QColor::HexArgb);
     root["lyricsPrechorusComponentColor"] = m_prechorusComponentColor.name(QColor::HexArgb);
@@ -205,6 +224,37 @@ void SettingsManager::setActiveControllers(const QVariantList& controllers) {
 void SettingsManager::setTimersJson(const QJsonArray& timers) {
     m_timersJson = timers;
     saveSettings();
+}
+
+void SettingsManager::setArrangementPrefix(const QString& prefix) {
+    if (m_arrangementPrefix != prefix) {
+        m_arrangementPrefix = prefix;
+        emit arrangementPrefixChanged();
+        saveSettings();
+    }
+}
+
+void SettingsManager::setLeaderNames(const QStringList& names) {
+    if (m_leaderNames != names) {
+        m_leaderNames = names;
+        emit leaderNamesChanged();
+        saveSettings();
+    }
+}
+
+void SettingsManager::addLeaderName(const QString& name) {
+    if (!m_leaderNames.contains(name)) {
+        m_leaderNames.append(name);
+        emit leaderNamesChanged();
+        saveSettings();
+    }
+}
+
+void SettingsManager::removeLeaderName(const QString& name) {
+    if (m_leaderNames.removeOne(name)) {
+        emit leaderNamesChanged();
+        saveSettings();
+    }
 }
 
 // Lyrics Colors Getters and Setters

@@ -28,6 +28,18 @@ SplitView {
         slideGrid.forceActiveFocus();
     }
 
+    function getArrangementPrefix() {
+        var tmpl = AppContext.settingsManager.arrangementPrefix;
+        if (!tmpl) return "";
+        var d = AppContext.showModel.activeShow ? AppContext.showModel.activeShow.serviceDate : new Date();
+        var leader = AppContext.showModel.activeShow ? AppContext.showModel.activeShow.leaderName : "";
+        var yyyy = Qt.formatDate(d, "yyyy");
+        var mm = Qt.formatDate(d, "MM");
+        var dd = Qt.formatDate(d, "dd");
+        var res = tmpl.replace("<YYYY>", yyyy).replace("<MM>", mm).replace("<DD>", dd).replace("<LEADER-NAME>", leader);
+        return res.trim() + " ";
+    }
+
     Connections {
         target: AppContext.displayEngine
         function onIsRunningChanged() {
@@ -268,7 +280,10 @@ SplitView {
                 onOpened: newServiceInput.forceActiveFocus()
                 onAccepted: {
                     if (newServiceInput.text.trim() !== "") {
-                        AppContext.showModel.newShow(newServiceInput.text.trim())
+                        var dateString = newServiceDateInput.text.trim() || new Date().toISOString().split('T')[0];
+                        var dateObj = new Date(dateString);
+                        var leader = newServiceLeaderCombo.currentText;
+                        AppContext.showModel.newShowWithDetails(newServiceInput.text.trim(), dateObj, leader)
                         slideGrid.currentIndex = 0
                         AppContext.displayEngine.jumpToSlide(0)
                     }
@@ -283,7 +298,23 @@ SplitView {
                         id: newServiceInput
                         Layout.fillWidth: true
                         placeholderText: "e.g., Sunday Morning"
-                        onAccepted: newServiceDialog.accept()
+                    }
+                    Label {
+                        text: "Service Date:"
+                    }
+                    TextField {
+                        id: newServiceDateInput
+                        Layout.fillWidth: true
+                        placeholderText: "YYYY-MM-DD"
+                        text: new Date().toISOString().split('T')[0]
+                    }
+                    Label {
+                        text: "Service Leader:"
+                    }
+                    ComboBox {
+                        id: newServiceLeaderCombo
+                        Layout.fillWidth: true
+                        model: AppContext.settingsManager.leaderNames
                     }
                 }
             }
@@ -876,7 +907,12 @@ SplitView {
                     onClicked: {
                         if (AppContext.slideDeckModel.deck && AppContext.slideDeckModel.deck.activeArrangementName) {
                             cloneDialog.sourceName = AppContext.slideDeckModel.deck.activeArrangementName
-                            cloneDialog.nameInput = cloneDialog.sourceName + " (Copy)"
+                            var prefix = servicesView.getArrangementPrefix()
+                            if (prefix) {
+                                cloneDialog.nameInput = prefix
+                            } else {
+                                cloneDialog.nameInput = cloneDialog.sourceName + " (Copy)"
+                            }
                             cloneDialog.open()
                         }
                     }
@@ -1919,7 +1955,7 @@ SplitView {
         
         onOpened: {
             nameField.forceActiveFocus()
-            nameField.selectAll()
+            nameField.cursorPosition = nameField.text.length
         }
     }
 }
