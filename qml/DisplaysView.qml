@@ -136,45 +136,98 @@ Item {
                                         }
                                     }
 
-                                    Switch {
-                                        id: disableSwitch
-                                        text: "Disable"
-                                        checked: model.disabled
-                                        onCheckedChanged: {
-                                            if (model.disabled !== checked) {
-                                                model.disabled = checked
-                                            }
-                                        }
-
-                                        indicator: Rectangle {
-                                            implicitWidth: 40
-                                            implicitHeight: 22
-                                            x: disableSwitch.leftPadding
-                                            y: parent.height / 2 - height / 2
-                                            radius: 11
-                                            color: disableSwitch.checked ? palette.highlight : palette.mid
-                                            border.color: Qt.darker(color, 1.2)
-                                            border.width: 1
-
-                                            Rectangle {
-                                                x: disableSwitch.checked ? parent.width - width - 2 : 2
-                                                y: 2
-                                                width: 16
-                                                height: 16
-                                                radius: 8
-                                                color: "white"
-                                                
-                                                Behavior on x {
-                                                    NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+                                    ColumnLayout {
+                                        spacing: 5
+                                        Layout.alignment: Qt.AlignTop
+                                        
+                                        Switch {
+                                            id: disableSwitch
+                                            text: "Disable Monitor"
+                                            checked: model.disabled
+                                            onCheckedChanged: {
+                                                if (model.disabled !== checked) {
+                                                    model.disabled = checked
+                                                    if (checked && !model.presentationDisabled) {
+                                                        model.presentationDisabled = true
+                                                    }
                                                 }
                                             }
+
+                                            indicator: Rectangle {
+                                                implicitWidth: 40
+                                                implicitHeight: 22
+                                                x: disableSwitch.leftPadding
+                                                y: parent.height / 2 - height / 2
+                                                radius: 11
+                                                color: disableSwitch.checked ? palette.highlight : palette.mid
+                                                border.color: Qt.darker(color, 1.2)
+                                                border.width: 1
+
+                                                Rectangle {
+                                                    x: disableSwitch.checked ? parent.width - width - 2 : 2
+                                                    y: 2
+                                                    width: 16
+                                                    height: 16
+                                                    radius: 8
+                                                    color: "white"
+                                                    
+                                                    Behavior on x {
+                                                        NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+                                                    }
+                                                }
+                                            }
+
+                                            contentItem: Label {
+                                                text: disableSwitch.text
+                                                font: disableSwitch.font
+                                                verticalAlignment: Text.AlignVCenter
+                                                leftPadding: disableSwitch.indicator.width + disableSwitch.spacing
+                                            }
                                         }
 
-                                        contentItem: Label {
-                                            text: disableSwitch.text
-                                            font: disableSwitch.font
-                                            verticalAlignment: Text.AlignVCenter
-                                            leftPadding: disableSwitch.indicator.width + disableSwitch.spacing
+                                        Switch {
+                                            id: disablePresentationSwitch
+                                            text: "Disable Presentation"
+                                            checked: model.presentationDisabled
+                                            onCheckedChanged: {
+                                                if (model.presentationDisabled !== checked) {
+                                                    model.presentationDisabled = checked
+                                                    if (!checked && model.disabled) {
+                                                        model.disabled = false
+                                                    }
+                                                }
+                                            }
+
+                                            indicator: Rectangle {
+                                                implicitWidth: 40
+                                                implicitHeight: 22
+                                                x: disablePresentationSwitch.leftPadding
+                                                y: parent.height / 2 - height / 2
+                                                radius: 11
+                                                color: disablePresentationSwitch.checked ? palette.highlight : palette.mid
+                                                border.color: Qt.darker(color, 1.2)
+                                                border.width: 1
+
+                                                Rectangle {
+                                                    x: disablePresentationSwitch.checked ? parent.width - width - 2 : 2
+                                                    y: 2
+                                                    width: 16
+                                                    height: 16
+                                                    radius: 8
+                                                    color: "white"
+                                                    
+                                                    Behavior on x {
+                                                        NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+                                                    }
+                                                }
+                                            }
+
+                                            contentItem: Label {
+                                                text: disablePresentationSwitch.text
+                                                font: disablePresentationSwitch.font
+                                                verticalAlignment: Text.AlignVCenter
+                                                leftPadding: disablePresentationSwitch.indicator.width + disablePresentationSwitch.spacing
+                                            }
                                         }
                                     }
                                 }

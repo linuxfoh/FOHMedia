@@ -419,7 +419,7 @@ void DisplayEngine::start() {
 
         for (int i = 0; i < screenConfigs.size(); ++i) {
             const ScreenConfig& cfg = screenConfigs[i];
-            if (cfg.hardwareDisplayIndex == -2 || cfg.disabled) continue; // Disabled screen
+            if (cfg.hardwareDisplayIndex == -2 || cfg.disabled || cfg.presentationDisabled) continue; // Disabled screen
 
             bool isStage = (cfg.name.compare("Stage", Qt::CaseInsensitive) == 0);
 

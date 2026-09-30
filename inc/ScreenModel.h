@@ -19,6 +19,7 @@ struct ScreenConfig {
     bool isLocked = false;
     bool monitorEnabled = true;
     bool disabled = false;
+    bool presentationDisabled = false;
 
     QJsonObject toJson() const;
     static ScreenConfig fromJson(const QJsonObject& json);
@@ -38,7 +39,8 @@ public:
         IsFullscreenRole,
         IsLockedRole,
         MonitorEnabledRole,
-        DisabledRole
+        DisabledRole,
+        PresentationDisabledRole
     };
 
     explicit ScreenModel(QObject* parent = nullptr);
@@ -54,7 +56,7 @@ public:
 
     Q_INVOKABLE void addScreen(const QString& name);
     Q_INVOKABLE void removeScreen(int index);
-    Q_INVOKABLE void updateScreen(int index, const QString& name, int displayIndex, int width, int height, bool isFullscreen, bool monitorEnabled, bool disabled = false);
+    Q_INVOKABLE void updateScreen(int index, const QString& name, int displayIndex, int width, int height, bool isFullscreen, bool monitorEnabled, bool disabled = false, bool presentationDisabled = false);
 
     // Returns a list of strings for UI combobox: ["Display 1 (1920x1080)", "Display 2 (1280x720)"]
     Q_INVOKABLE QStringList getHardwareDisplays() const;

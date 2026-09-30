@@ -15,6 +15,7 @@ QJsonObject ScreenConfig::toJson() const {
     json["isLocked"] = isLocked;
     json["monitorEnabled"] = monitorEnabled;
     json["disabled"] = disabled;
+    json["presentationDisabled"] = presentationDisabled;
     return json;
 }
 
@@ -29,6 +30,13 @@ ScreenConfig ScreenConfig::fromJson(const QJsonObject& json) {
     config.isLocked = json["isLocked"].toBool(false);
     config.monitorEnabled = json["monitorEnabled"].toBool(true);
     config.disabled = json["disabled"].toBool(false);
+    config.presentationDisabled = json["presentationDisabled"].toBool(false);
+    // Enforce business logic on load
+    if (config.disabled) {
+        config.presentationDisabled = true;
+    } else if (!config.presentationDisabled) {
+        config.disabled = false;
+    }
     return config;
 }
 
@@ -55,6 +63,7 @@ QVariant ScreenModel::data(const QModelIndex& index, int role) const {
         case IsLockedRole: return screen.isLocked;
         case MonitorEnabledRole: return screen.monitorEnabled;
         case DisabledRole: return screen.disabled;
+        case PresentationDisabledRole: return screen.presentationDisabled;
     }
     return QVariant();
 }
@@ -102,6 +111,12 @@ bool ScreenModel::setData(const QModelIndex& index, const QVariant& value, int r
                 changed = true;
             }
             break;
+        case PresentationDisabledRole:
+            if (screen.presentationDisabled != value.toBool()) {
+                screen.presentationDisabled = value.toBool();
+                changed = true;
+            }
+            break;
         case DisabledRole:
             if (screen.disabled != value.toBool()) {
                 screen.disabled = value.toBool();
@@ -129,6 +144,7 @@ QHash<int, QByteArray> ScreenModel::roleNames() const {
     roles[IsLockedRole] = "isLocked";
     roles[MonitorEnabledRole] = "monitorEnabled";
     roles[DisabledRole] = "disabled";
+    roles[PresentationDisabledRole] = "presentationDisabled";
     return roles;
 }
 
@@ -163,7 +179,7 @@ void ScreenModel::removeScreen(int index) {
     emit screensChanged();
 }
 
-void ScreenModel::updateScreen(int index, const QString& name, int displayIndex, int width, int height, bool isFullscreen, bool monitorEnabled, bool disabled) {
+void ScreenModel::updateScreen(int index, const QString& name, int displayIndex, int width, int height, bool isFullscreen, bool monitorEnabled, bool disabled, bool presentationDisabled) {
     if (index < 0 || index >= m_screens.size()) return;
     
     ScreenConfig& screen = m_screens[index];
@@ -175,6 +191,12 @@ void ScreenModel::updateScreen(int index, const QString& name, int displayIndex,
     screen.isFullscreen = isFullscreen;
     screen.monitorEnabled = monitorEnabled;
     screen.disabled = disabled;
+    screen.presentationDisabled = presentationDisabled;
+    if (screen.disabled) {
+        screen.presentationDisabled = true;
+    } else if (!screen.presentationDisabled) {
+        screen.disabled = false;
+    }
     
     emit dataChanged(this->index(index, 0), this->index(index, 0));
     emit screensChanged();
