@@ -276,12 +276,33 @@ SplitView {
                 width: 300
                 parent: Overlay.overlay
                 anchors.centerIn: parent
+
+                property bool hasManualName: false
+
+                function updateAutoName() {
+                    if (!hasManualName) {
+                        var tmpl = AppContext.settingsManager.arrangementPrefix;
+                        if (!tmpl) return;
+                        var d = newServiceDateInput.selectedDate;
+                        var leader = newServiceLeaderCombo.currentText;
+                        var yyyy = Qt.formatDate(d, "yyyy");
+                        var mm = Qt.formatDate(d, "MM");
+                        var dd = Qt.formatDate(d, "dd");
+                        var res = tmpl.replace("<YYYY>", yyyy).replace("<MM>", mm).replace("<DD>", dd).replace("<LEADER-NAME>", leader);
+                        newServiceInput.text = res.trim();
+                    }
+                }
                 
-                onOpened: newServiceInput.forceActiveFocus()
+                onOpened: {
+                    hasManualName = false
+                    updateAutoName()
+                    newServiceInput.forceActiveFocus()
+                    newServiceInput.selectAll()
+                }
+
                 onAccepted: {
                     if (newServiceInput.text.trim() !== "") {
-                        var dateString = newServiceDateInput.text.trim() || new Date().toISOString().split('T')[0];
-                        var dateObj = new Date(dateString);
+                        var dateObj = newServiceDateInput.selectedDate;
                         var leader = newServiceLeaderCombo.currentText;
                         AppContext.showModel.newShowWithDetails(newServiceInput.text.trim(), dateObj, leader)
                         slideGrid.currentIndex = 0
@@ -292,21 +313,98 @@ SplitView {
                 ColumnLayout {
                     anchors.fill: parent
                     Label {
-                        text: "Service Name:"
-                    }
-                    TextField {
-                        id: newServiceInput
-                        Layout.fillWidth: true
-                        placeholderText: "e.g., Sunday Morning"
-                    }
-                    Label {
                         text: "Service Date:"
                     }
-                    TextField {
+                    Button {
                         id: newServiceDateInput
                         Layout.fillWidth: true
-                        placeholderText: "YYYY-MM-DD"
-                        text: new Date().toISOString().split('T')[0]
+                        property var selectedDate: new Date()
+                        onSelectedDateChanged: newServiceDialog.updateAutoName()
+                        text: Qt.formatDate(selectedDate, "yyyy-MM-dd")
+
+                        onClicked: datePopup.open()
+
+                        Popup {
+                            id: datePopup
+                            width: 300
+                            height: 350
+                            modal: true
+                            focus: true
+                            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                            parent: Overlay.overlay
+                            anchors.centerIn: parent
+
+                            background: Rectangle {
+                                color: palette.window
+                                border.color: palette.dark
+                                border.width: 1
+                                radius: 8
+                            }
+
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    ToolButton {
+                                        text: "◀"
+                                        onClicked: {
+                                            if (monthGrid.month === 0) {
+                                                monthGrid.month = 11
+                                                monthGrid.year--
+                                            } else {
+                                                monthGrid.month--
+                                            }
+                                        }
+                                    }
+                                    Label {
+                                        text: monthGrid.title
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        font.bold: true
+                                    }
+                                    ToolButton {
+                                        text: "▶"
+                                        onClicked: {
+                                            if (monthGrid.month === 11) {
+                                                monthGrid.month = 0
+                                                monthGrid.year++
+                                            } else {
+                                                monthGrid.month++
+                                            }
+                                        }
+                                    }
+                                }
+                                DayOfWeekRow {
+                                    locale: monthGrid.locale
+                                    Layout.fillWidth: true
+                                }
+                                MonthGrid {
+                                    id: monthGrid
+                                    month: newServiceDateInput.selectedDate.getMonth()
+                                    year: newServiceDateInput.selectedDate.getFullYear()
+                                    locale: Qt.locale()
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+
+                                    delegate: Rectangle {
+                                        property bool isSelected: Qt.formatDate(model.date, "yyyy-MM-dd") === Qt.formatDate(newServiceDateInput.selectedDate, "yyyy-MM-dd")
+                                        color: isSelected ? palette.highlight : (model.month === monthGrid.month ? "transparent" : palette.mid)
+                                        radius: 4
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: model.day
+                                            color: parent.isSelected ? palette.highlightedText : (model.month === monthGrid.month ? palette.text : palette.windowText)
+                                        }
+                                    }
+
+                                    onClicked: (date) => {
+                                        newServiceDateInput.selectedDate = date
+                                        datePopup.close()
+                                    }
+                                }
+                            }
+                        }
                     }
                     Label {
                         text: "Service Leader:"
@@ -315,6 +413,16 @@ SplitView {
                         id: newServiceLeaderCombo
                         Layout.fillWidth: true
                         model: AppContext.settingsManager.leaderNames
+                        onCurrentTextChanged: newServiceDialog.updateAutoName()
+                    }
+                    Label {
+                        text: "Service Name:"
+                    }
+                    TextField {
+                        id: newServiceInput
+                        Layout.fillWidth: true
+                        placeholderText: "e.g., Sunday Morning"
+                        onTextEdited: newServiceDialog.hasManualName = true
                     }
                 }
             }
