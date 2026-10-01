@@ -270,6 +270,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
+                    currentIndex: -1
                     model: {
                         let allFiles = AppContext.lyricsModel.libraryFiles
                         let query = searchField.text.toLowerCase().trim()
@@ -306,6 +307,7 @@ Item {
                         rightPadding: 42
                         highlighted: ListView.isCurrentItem || AppContext.lyricsModel.currentTitle === modelData.title // basic highlighting
                         onClicked: {
+                            ListView.view.currentIndex = index
                             AppContext.lyricsModel.loadFromLibrary(modelData.filename)
                         }
                         
