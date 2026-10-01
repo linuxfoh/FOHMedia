@@ -29,7 +29,8 @@ public:
         IsFirstRole,
         LayoutsRole,
         NextSlideTextRole,
-        CardLayoutRole
+        CardLayoutRole,
+        ForegroundMediaRole
     };
     explicit SlideDeckViewModel(SlideDeck* deck = nullptr, QObject* parent = nullptr);
     ~SlideDeckViewModel() override;
@@ -71,6 +72,7 @@ public slots:
     Q_INVOKABLE void insertBlankSlideAfter(int index);
     Q_INVOKABLE void removeSlideAndSave(int index);
     Q_INVOKABLE void splitComponentGroup(int slideIndex, const QString& newComponent);
+    Q_INVOKABLE void addImagesToDeck(const QVariantList& urls);
     
     QStringList availableComponentNames() const;
 

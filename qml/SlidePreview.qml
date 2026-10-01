@@ -11,6 +11,7 @@ Rectangle {
     property string nextSlideText: ""
     property bool showBackground: false
     property string globalBackgroundMedia: ""
+    property string foregroundMedia: ""
     
     property bool renderBackground: true
     property bool renderText: true
@@ -137,6 +138,21 @@ Rectangle {
             }
             fillMode: Image.PreserveAspectCrop
             visible: root.renderBackground && source.toString() !== ""
+        }
+
+        Image {
+            anchors.fill: parent
+            source: {
+                if (root.foregroundMedia === "") return "";
+                if (root.foregroundMedia.startsWith("file://") || root.foregroundMedia.startsWith("qrc:/")) {
+                    return root.foregroundMedia;
+                }
+                return AppContext.getLocalFileUrl(root.foregroundMedia);
+            }
+            fillMode: Image.PreserveAspectFit
+            visible: root.foregroundMedia !== "" && root.renderText
+            sourceSize: Qt.size(width, height)
+            asynchronous: true
         }
 
         TextEdit {

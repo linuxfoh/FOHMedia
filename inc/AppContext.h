@@ -53,13 +53,7 @@ public:
     MediaViewModel* imageMediaModel() const { return m_imageMediaModel; }
     MediaViewModel* videoMediaModel() const { return m_videoMediaModel; }
 
-    Q_INVOKABLE QUrl getLocalFileUrl(const QString& path) const {
-        if (path.isEmpty()) return QUrl();
-        if (path.startsWith("file://") || path.startsWith("qrc:/") || path.contains("://")) {
-            return QUrl(path);
-        }
-        return QUrl::fromLocalFile(path);
-    }
+    Q_INVOKABLE QUrl getLocalFileUrl(const QString& path) const;
 
     Q_INVOKABLE QColor getComponentColor(const QString& name, const QColor& fallbackColor) const;
 

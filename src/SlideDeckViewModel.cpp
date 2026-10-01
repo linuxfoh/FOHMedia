@@ -1,6 +1,15 @@
+#include <QRegularExpression>
+#include <QUrl>
+#include <QImageReader>
+#include <QDir>
+#include <QFileInfo>
 #include "../inc/SlideDeckViewModel.h"
 #include "../inc/SlideDeck.h"
 #include "../inc/Slide.h"
+#include "../inc/Library.h"
+#include <QDir>
+#include <QFileInfo>
+#include <QFile>
 #include "../inc/Arrangement.h"
 #include "../inc/ShowSerializer.h"
 #include "../inc/ScreenModel.h"
@@ -73,6 +82,7 @@ QHash<int, QByteArray> SlideDeckViewModel::roleNames() const {
     roles[LayoutsRole] = "layouts";
     roles[NextSlideTextRole] = "nextSlideText";
     roles[CardLayoutRole] = "cardLayout";
+    roles[ForegroundMediaRole] = "foregroundMedia";
     return roles;
 }
 
@@ -106,6 +116,8 @@ QVariant SlideDeckViewModel::data(const QModelIndex& index, int role) const {
         return "";
     } else if (role == CardLayoutRole) {
         return getCardLayout(index.row());
+    } else if (role == ForegroundMediaRole) {
+        return slide->foregroundImage();
     }
     return QVariant();
 }
@@ -185,6 +197,7 @@ void SlideDeckViewModel::onComponentInserted(int index, const QString& name) {
             Slide* slide = new Slide(this, isfirst);
             slide->setPlainText(slideData.lines.join('\n'));
             slide->setLayouts(slideData.layouts);
+            slide->setForegroundImage(slideData.foregroundImage);
             slide->setProperty("componentName", name);
             slide->setProperty("arrangementIndex", index);
             
@@ -199,7 +212,7 @@ void SlideDeckViewModel::onComponentInserted(int index, const QString& name) {
         }
         
         emit dataChanged(this->index(slideOffset, 0), this->index(static_cast<int>(m_slides.size()) - 1, 0),
-                         {SlideTextRole, ComponentNameRole, IsFirstRole, LayoutsRole, NextSlideTextRole, CardLayoutRole});
+                         {SlideTextRole, ComponentNameRole, IsFirstRole, LayoutsRole, NextSlideTextRole, CardLayoutRole, ForegroundMediaRole});
         emit slidesInserted(slideOffset, numSlides);
         emit slidesUpdated();
     }
@@ -251,7 +264,7 @@ void SlideDeckViewModel::onComponentRemoved(int index, const QString& /*name*/) 
             appendSlide();
         } else if (oldSlideStart < m_slides.size()) {
             emit dataChanged(this->index(oldSlideStart, 0), this->index(static_cast<int>(m_slides.size()) - 1, 0),
-                             {SlideTextRole, ComponentNameRole, IsFirstRole, LayoutsRole, NextSlideTextRole, CardLayoutRole});
+                             {SlideTextRole, ComponentNameRole, IsFirstRole, LayoutsRole, NextSlideTextRole, CardLayoutRole, ForegroundMediaRole});
         }
         
         emit slidesRemovedEvent(oldSlideStart, slideCount);
@@ -330,7 +343,7 @@ void SlideDeckViewModel::onComponentMoved(int fromIndex, int toIndex) {
         }
 
         emit dataChanged(this->index(0, 0), this->index(static_cast<int>(m_slides.size()) - 1, 0),
-                         {SlideTextRole, ComponentNameRole, IsFirstRole, LayoutsRole, NextSlideTextRole, CardLayoutRole});
+                         {SlideTextRole, ComponentNameRole, IsFirstRole, LayoutsRole, NextSlideTextRole, CardLayoutRole, ForegroundMediaRole});
         emit slidesUpdated();
     }
     
@@ -416,6 +429,7 @@ void SlideDeckViewModel::buildActiveSlides() {
                 }
                 if (slide) {
                     slide->setLayouts(slideData.layouts);
+                    slide->setForegroundImage(slideData.foregroundImage);
                     slide->setProperty("componentName", compName);
                     slide->setProperty("arrangementIndex", arrIndex);
                     m_slides.append(slide);
@@ -607,6 +621,7 @@ void SlideDeckViewModel::flushSlidesToComponents(int lastEditedSlideIndex) {
         SlideData data;
         data.lines = slide->plainText().split(QLatin1Char('\n'));
         data.layouts = slide->layouts();
+        data.foregroundImage = slide->foregroundImage();
         
         currentInstance.slides.append(data);
         ++slidePos;
@@ -886,6 +901,7 @@ QVariantMap SlideDeckViewModel::getSlideDataForPreview(int index) const {
             layouts[it.key()] = layout;
         }
         map["layouts"] = layouts;
+        map["foregroundMedia"] = slide->foregroundImage();
         
         if (index + 1 < m_slides.size()) {
             map["nextSlideText"] = m_slides[index + 1]->plainText();
@@ -895,6 +911,7 @@ QVariantMap SlideDeckViewModel::getSlideDataForPreview(int index) const {
     } else {
         map["slideText"] = "";
         map["layouts"] = QVariantMap();
+        map["foregroundMedia"] = "";
         map["nextSlideText"] = "";
     }
     return map;
@@ -906,6 +923,7 @@ QList<SlideData> SlideDeckViewModel::toSlideDataList() const {
         SlideData data;
         data.lines = m_slides[i]->plainText().split('\n');
         data.layouts = m_slides[i]->layouts();
+        data.foregroundImage = m_slides[i]->foregroundImage();
         data.componentName = m_slides[i]->property("componentName").toString();
         
         // Calculate component instance bounds by arrangementIndex
@@ -1075,4 +1093,73 @@ void SlideDeckViewModel::performSaveDeck() {
     if (m_deck) {
         ShowSerializer::saveDeckToFile(m_deck);
     }
+}
+
+void SlideDeckViewModel::addImagesToDeck(const QVariantList& urls) {
+    if (!m_deck) return;
+
+    QString safeDeckName = m_deck->name();
+    safeDeckName.replace(QRegularExpression("[^a-zA-Z0-9 -]"), "");
+    if (safeDeckName.isEmpty()) safeDeckName = "Deck";
+    QString destDirStr = Library::mediaDir() + "/" + safeDeckName;
+    QDir destDir(destDirStr);
+
+    QList<SlideData> newSlides;
+    QMap<QString, QString> defaultLayouts;
+    
+    QString compName = "Images";
+    auto comps = m_deck->components();
+    QList<SlideData> compSlides = comps.value(compName);
+    if (!compSlides.isEmpty()) {
+        defaultLayouts = compSlides.last().layouts;
+    } else {
+        defaultLayouts["Audience"] = "Default.fohl";
+        defaultLayouts["Stage"] = "StageDefault.fohl";
+    }
+
+    for (const QVariant& var : urls) {
+        QUrl url = var.toUrl();
+        if (!url.isValid() || !url.isLocalFile()) continue;
+
+        QString localFile = url.toLocalFile();
+        QFileInfo srcInfo(localFile);
+        if (!srcInfo.exists() || !srcInfo.isFile()) continue;
+
+        QString suffix = srcInfo.suffix().toLower();
+        if (suffix != "jpg" && suffix != "jpeg" && suffix != "png" && suffix != "bmp" && suffix != "webp") {
+            continue;
+        }
+
+        if (!destDir.exists()) QDir().mkpath(destDirStr);
+        QString destPath = Library::uniqueDestPath(destDir.absolutePath(), srcInfo.fileName());
+        
+        if (QFile::copy(srcInfo.absoluteFilePath(), destPath)) {
+            SlideData data;
+            data.lines = {""};
+            data.layouts = defaultLayouts;
+            QDir mediaDir(Library::mediaDir());
+            data.foregroundImage = mediaDir.relativeFilePath(destPath);
+            newSlides.append(data);
+        }
+    }
+
+    if (newSlides.isEmpty()) return;
+
+    compSlides.append(newSlides);
+    comps[compName] = compSlides;
+    
+    if (m_deck->arrangementCount() == 0) {
+        Arrangement* arr = m_deck->appendArrangement("Default");
+        arr->setSequence({compName});
+        m_deck->setActiveArrangement("Default");
+    } else {
+        Arrangement* arr = m_deck->arrangement(m_deck->activeArrangementName());
+        if (arr && !arr->sequence().contains(compName)) {
+            QStringList seq = arr->sequence();
+            seq.append(compName);
+            arr->setSequence(seq);
+        }
+    }
+    
+    m_deck->setComponents(comps);
 }

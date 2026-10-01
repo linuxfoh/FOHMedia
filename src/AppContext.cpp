@@ -1,3 +1,6 @@
+#include "Library.h"
+#include <QFileInfo>
+#include <QUrl>
 #include "AppContext.h"
 #include <QQuickWindow>
 #include <QQmlEngine>
@@ -154,6 +157,12 @@ AppContext::AppContext(QQmlEngine* engine, QObject* parent) : QObject(parent) {
     QObject::connect(m_showModel, &ShowViewModel::defaultTransitionDurationMsChanged, m_displayEngine, [this]() {
         m_displayEngine->setTransitionDurationMs(m_showModel->defaultTransitionDurationMs());
     });
+    
+    // Safety sync: Ensure transition settings are correctly synced whenever a show is loaded or activated
+    QObject::connect(m_showModel, &ShowViewModel::activeIndexChanged, m_displayEngine, [this]() {
+        m_displayEngine->setTransitionType(m_showModel->defaultTransitionType());
+        m_displayEngine->setTransitionDurationMs(m_showModel->defaultTransitionDurationMs());
+    });
 
     // Set initial transition values
     m_displayEngine->setTransitionType(m_showModel->defaultTransitionType());
@@ -167,4 +176,17 @@ AppContext::AppContext(QQmlEngine* engine, QObject* parent) : QObject(parent) {
 
     // Connect layout edits to clear the DisplayEngine cache
     QObject::connect(m_layoutEditorModel, &LayoutEditorViewModel::activeLayoutChanged, m_displayEngine, &DisplayEngine::clearLayoutCache);
+}
+
+QUrl AppContext::getLocalFileUrl(const QString& path) const {
+    if (path.isEmpty()) return QUrl();
+    if (path.startsWith("file://") || path.startsWith("qrc:/") || path.contains("://")) {
+        return QUrl(path);
+    }
+    QFileInfo fi(path);
+    if (fi.isAbsolute()) {
+        return QUrl::fromLocalFile(path);
+    } else {
+        return QUrl::fromLocalFile(Library::mediaDir() + "/" + path);
+    }
 }

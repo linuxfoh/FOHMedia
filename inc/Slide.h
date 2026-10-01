@@ -44,6 +44,9 @@ public:
     void setLayoutForScreen(const QString& screenName, const QString& layoutFile) { m_layouts[screenName] = layoutFile; }
     void setLayouts(const QMap<QString, QString>& layouts) { m_layouts = layouts; }
 
+    QString foregroundImage() const { return m_foregroundImage; }
+    void setForegroundImage(const QString& img) { m_foregroundImage = img; }
+
 signals:
     void contentChanged();
 
@@ -55,4 +58,5 @@ private:
     QColor m_textColor = Qt::white;
     bool firstSlide;
     QMap<QString, QString> m_layouts;
+    QString m_foregroundImage;
 };

@@ -8,6 +8,7 @@ struct SlideData {
     QStringList lines;
     QMap<QString, QString> layouts; // ScreenName -> LayoutFileName
     QString componentName;
+    QString foregroundImage;
     int groupSlideIndex = 0;
     int groupSlideCount = 0;
 };

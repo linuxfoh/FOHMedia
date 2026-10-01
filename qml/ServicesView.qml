@@ -49,16 +49,6 @@ SplitView {
         }
     }
 
-    TapHandler {
-        onTapped: (eventPoint) => {
-            if (showTitleField.activeFocus) {
-                var pos = showTitleField.mapFromItem(servicesView, eventPoint.position.x, eventPoint.position.y);
-                if (!showTitleField.contains(Qt.point(pos.x, pos.y))) {
-                    showTitleField.focus = false;
-                }
-            }
-        }
-    }
 
     Timer {
         id: autoSaveTimer
@@ -113,6 +103,16 @@ SplitView {
                             newServiceInput.text = ""
                             newServiceDialog.open()
                         }
+                    }
+                    ToolButton {
+                        focusPolicy: Qt.NoFocus
+                        text: "🖼️"
+                        font.pixelSize: Qt.platform.os === "osx" || Qt.platform.os === "macos" ? 18 : 20
+                        FohToolTip {
+                            visible: parent.hovered
+                            text: "Add Image Deck"
+                        }
+                        onClicked: newBlankDeckDialog.open()
                     }
                     ToolButton {
                         focusPolicy: Qt.NoFocus
@@ -544,6 +544,38 @@ SplitView {
                     text: "Are you sure you want to completely delete the service '" + confirmRemoveServiceDialog.showTitle + "'?\n\nThis cannot be undone."
                     wrapMode: Text.WordWrap
                     width: 300
+                }
+            }
+
+            Dialog {
+                id: newBlankDeckDialog
+                title: "New Image Deck"
+                standardButtons: Dialog.Ok | Dialog.Cancel
+                width: 300
+                parent: Overlay.overlay
+                anchors.centerIn: parent
+
+                onOpened: {
+                    deckNameInput.text = "Images"
+                    deckNameInput.selectAll()
+                    deckNameInput.forceActiveFocus()
+                }
+
+                onAccepted: {
+                    AppContext.showModel.addBlankDeck(deckNameInput.text)
+                }
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    
+                    TextField {
+                        id: deckNameInput
+                        Layout.fillWidth: true
+                        placeholderText: "Deck Name"
+                        onAccepted: {
+                            newBlankDeckDialog.accept()
+                        }
+                    }
                 }
             }
 
@@ -1493,10 +1525,20 @@ SplitView {
                 }
                 }
             }
-            GridView {
-                id: slideGrid
+            DropArea {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                keys: ["text/uri-list"]
+                onDropped: function(drop) {
+                    if (drop.hasUrls) {
+                        AppContext.slideDeckModel.addImagesToDeck(drop.urls)
+                        drop.accept()
+                    }
+                }
+                
+                GridView {
+                id: slideGrid
+                anchors.fill: parent
                 cellWidth: 320 * zoomSlider.value
                 cellHeight: 180 * zoomSlider.value + 20
                 clip: true
@@ -1654,6 +1696,7 @@ SplitView {
                             slideText: model.slideText
                             showBackground: showBackgroundsSwitch.checked
                             globalBackgroundMedia: AppContext.slideDeckModel.deck ? AppContext.slideDeckModel.deck.globalBackgroundMedia : ""
+                            foregroundMedia: model.foregroundMedia ? model.foregroundMedia : ""
                             topRightRadius: 11
                             bottomRightRadius: 11
                             quickEditEnabled: servicesView.isEditingArrangement
@@ -1723,6 +1766,7 @@ SplitView {
                         }
                     }
                 }
+            }
             }
 
             // Bottom control bar for Zoom and Settings
@@ -1923,6 +1967,7 @@ SplitView {
                             nextSlideText: monitorsLayout.previewData.nextSlideText || ""
                             showBackground: true
                             globalBackgroundMedia: AppContext.slideDeckModel.deck ? AppContext.slideDeckModel.deck.globalBackgroundMedia : ""
+                            foregroundMedia: monitorsLayout.previewData.foregroundMedia || ""
                             quickEditEnabled: false
                         }
                     }

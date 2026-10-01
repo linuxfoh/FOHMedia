@@ -45,6 +45,7 @@ Rectangle {
     property string nextSlideText: ""
     property bool isStage: false
     property string globalBackgroundMedia: ""
+    property string foregroundMedia: ""
     property string transitionType: "Cut"
     property int transitionDurationMs: 0
     property int currentSlideIndex: -1
@@ -74,52 +75,65 @@ Rectangle {
     property string displayedLayoutName: layoutName
     property string displayedSlideText: slideText
     property string displayedNextSlideText: nextSlideText
+    property string displayedForegroundMedia: foregroundMedia
 
-    onSlideTextChanged: {
-        if (!transitionAnim.running) {
-            root.displayedSlideText = root.slideText
-        }
-    }
-    onNextSlideTextChanged: {
-        if (!transitionAnim.running) {
-            root.displayedNextSlideText = root.nextSlideText
-        }
-    }
-    onLayoutNameChanged: {
-        if (!transitionAnim.running) {
-            root.displayedLayoutName = root.layoutName
-        }
-    }
+    property int lastSlideIndex: -1
 
-    function runTransition() {
-        // Silent shift: If text and layout are completely identical, do not animate.
-        if (root.displayedSlideText === root.slideText && root.displayedLayoutName === root.layoutName) {
-            transitionAnim.stop();
-            slideLayer.opacity = 1.0;
-            slideLayer.x = 0;
-            slideLayer.y = 0;
-            return;
-        }
+    onSlideTextChanged: Qt.callLater(checkTransition)
+    onNextSlideTextChanged: Qt.callLater(checkTransition)
+    onLayoutNameChanged: Qt.callLater(checkTransition)
+    onForegroundMediaChanged: Qt.callLater(checkTransition)
+    onCurrentSlideIndexChanged: Qt.callLater(checkTransition)
 
-        // Cut / no-duration / stage: swap instantly, no animation.
-        if (root.isStage || root.transitionType === "Cut" || root.transitionDurationMs <= 0) {
-            transitionAnim.stop();
-            slideLayer.opacity = 1.0;
-            slideLayer.x = 0;
-            slideLayer.y = 0;
-            root.displayedLayoutName    = root.layoutName;
-            root.displayedSlideText     = root.slideText;
+    function checkTransition() {
+        if (root.lastSlideIndex === -1) {
+            root.lastSlideIndex = root.currentSlideIndex;
+            root.displayedSlideText = root.slideText;
+            root.displayedLayoutName = root.layoutName;
+            root.displayedForegroundMedia = root.foregroundMedia;
             root.displayedNextSlideText = root.nextSlideText;
             return;
         }
+        
+        if (root.currentSlideIndex === root.lastSlideIndex) {
+            // Live Edit: Instant update if not transitioning
+            if (!transitionAnim.running) {
+                root.displayedSlideText = root.slideText;
+                root.displayedLayoutName = root.layoutName;
+                root.displayedForegroundMedia = root.foregroundMedia;
+                root.displayedNextSlideText = root.nextSlideText;
+            }
+        } else {
+            // Slide transition
+            root.lastSlideIndex = root.currentSlideIndex;
+            
+            // Check for silent shift
+            if (root.displayedSlideText === root.slideText && root.displayedLayoutName === root.layoutName && root.displayedForegroundMedia === root.foregroundMedia) {
+                transitionAnim.stop();
+                slideLayer.opacity = 1.0;
+                slideLayer.x = 0;
+                slideLayer.y = 0;
+                return;
+            }
 
-        // Kick off a fresh two-phase transition: exit the current text,
-        // swap the text, then enter the new text.
-        transitionAnim.stop();
-        transitionAnim.start();
+            // Cut / no-duration / stage: swap instantly, no animation.
+            if (root.isStage || root.transitionType === "Cut" || root.transitionDurationMs <= 0) {
+                transitionAnim.stop();
+                slideLayer.opacity = 1.0;
+                slideLayer.x = 0;
+                slideLayer.y = 0;
+                root.displayedLayoutName    = root.layoutName;
+                root.displayedSlideText     = root.slideText;
+                root.displayedNextSlideText = root.nextSlideText;
+                root.displayedForegroundMedia = root.foregroundMedia;
+                return;
+            }
+
+            // Kick off a fresh two-phase transition
+            transitionAnim.stop();
+            transitionAnim.start();
+        }
     }
-
-    onCurrentSlideIndexChanged: runTransition()
 
     function isVideo(path) {
         if (!path) return false
@@ -192,6 +206,7 @@ Rectangle {
         nextSlideText: root.displayedNextSlideText
         showBackground: false
         globalBackgroundMedia: root.globalBackgroundMedia
+        foregroundMedia: root.displayedForegroundMedia
 
         renderBackground: false
         renderTimers: false
@@ -248,6 +263,7 @@ Rectangle {
                 root.displayedLayoutName    = root.layoutName;
                 root.displayedSlideText     = root.slideText;
                 root.displayedNextSlideText = root.nextSlideText;
+                root.displayedForegroundMedia = root.foregroundMedia;
 
                 // Reposition the (now hidden) layer to the entering start position.
                 if (root.transitionType === "Slide Left") {

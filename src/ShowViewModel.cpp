@@ -305,16 +305,16 @@ void ShowViewModel::setActiveIndex(int index) {
             if (s) s->notifyActiveChanged();
         }
 
-        emit activeDeckChanged(activeDeck());
-        emit showProgressTextChanged();
-        emit activeIndexChanged();
-        emit loadedShowsChanged();
-        
         if (oldShow != newShow) {
             emit showNameChanged();
             emit defaultTransitionTypeChanged();
             emit defaultTransitionDurationMsChanged();
         }
+
+        emit activeDeckChanged(activeDeck());
+        emit showProgressTextChanged();
+        emit activeIndexChanged();
+        emit loadedShowsChanged();
     }
 }
 
@@ -592,6 +592,22 @@ void ShowViewModel::addDeck(const QString& filePath) {
         path = QUrl(filePath).toLocalFile();
     }
     ShowSerializer::loadFohdFile(path, s);
+}
+
+void ShowViewModel::addBlankDeck(const QString& deckName) {
+    Show* s = activeShow();
+    if (!s) return;
+    
+    QString safeName = deckName.isEmpty() ? "Images" : deckName;
+    safeName.replace(QRegularExpression("[^a-zA-Z0-9 -_]"), "");
+    if (safeName.isEmpty()) safeName = "Images";
+
+    SlideDeck* deck = new SlideDeck(safeName, s);
+    s->addDeck(deck);
+    
+    // Set active index to this newly added deck (which is at the end of the show)
+    int deckIndex = s->deckCount() - 1;
+    setActiveIndex(flatIndexForShowDeck(s, deckIndex));
 }
 
 void ShowViewModel::removeDeck(int index) {

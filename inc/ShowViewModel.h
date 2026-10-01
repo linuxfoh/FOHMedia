@@ -76,6 +76,7 @@ public slots:
     Q_INVOKABLE bool isFirstDeckOfShow(int flatIndex) const;
     Q_INVOKABLE void renameShow(const QString& oldName, const QString& newName);
     Q_INVOKABLE void addDeck(const QString& filePath);
+    Q_INVOKABLE void addBlankDeck(const QString& deckName);
     Q_INVOKABLE void removeDeck(int index);
     Q_INVOKABLE void moveDeck(int fromIndex, int toIndex);
     Q_INVOKABLE void reloadDeck(const QString& sourceFile);

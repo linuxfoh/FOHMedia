@@ -512,6 +512,7 @@ void DisplayEngine::applyAudienceUpdate() {
         root->setProperty("transitionType", transType);
         root->setProperty("transitionDurationMs", transDur);
         root->setProperty("globalBackgroundMedia", bgMedia);
+        root->setProperty("foregroundMedia", currentSlide.foregroundImage);
         root->setProperty("currentSlideIndex", slideIdx);
     }
 }
@@ -566,6 +567,7 @@ void DisplayEngine::updateQmlContext(bool immediate) {
             root->setProperty("transitionType", transType);
             root->setProperty("transitionDurationMs", transDur);
             root->setProperty("globalBackgroundMedia", bgMedia);
+            root->setProperty("foregroundMedia", currentSlide.foregroundImage);
             root->setProperty("currentSlideIndex", slideIdx);
         }
     }

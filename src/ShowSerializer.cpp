@@ -281,6 +281,9 @@ SlideDeck* ShowSerializer::loadFohdFile(const QString& filePath, QObject* parent
                     if (stage.endsWith(".fohl")) stage.chop(5);
                     data.layouts["Stage"] = stage;
                 }
+                if (slideObj.contains("foreground_image") && slideObj["foreground_image"].isString()) {
+                    data.foregroundImage = slideObj["foreground_image"].toString();
+                }
             }
             componentSlides.append(data);
         }
@@ -442,6 +445,9 @@ void ShowSerializer::saveDeckToFile(SlideDeck* deck) {
                 layoutsObj[it.key()] = layoutVal;
             }
             slideObj["layouts"] = layoutsObj;
+            if (!slide.foregroundImage.isEmpty()) {
+                slideObj["foreground_image"] = slide.foregroundImage;
+            }
             slideArr.append(slideObj);
         }
         compsObj[compKey] = slideArr;
