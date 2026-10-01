@@ -117,13 +117,13 @@ Rectangle {
                 var url = "";
                 if (root.globalBackgroundMedia !== "") {
                     // Check if it's already a full URL or needs resolution
-                    if (root.globalBackgroundMedia.startsWith("file://") || root.globalBackgroundMedia.startsWith("qrc:/")) {
+                    if (root.globalBackgroundMedia.startsWith("qrc:/")) {
                         url = root.globalBackgroundMedia;
                     } else {
-                        url = AppContext.getLocalFileUrl(root.globalBackgroundMedia);
+                        url = AppContext.getImageProviderUrl(root.globalBackgroundMedia);
                     }
                 } else if (layoutProps && layoutProps.backgroundUrl) {
-                    url = layoutProps.backgroundUrl;
+                    url = AppContext.getImageProviderUrl(layoutProps.backgroundUrl);
                 }
                 
                 if (url !== "") {
@@ -144,10 +144,10 @@ Rectangle {
             anchors.fill: parent
             source: {
                 if (root.foregroundMedia === "") return "";
-                if (root.foregroundMedia.startsWith("file://") || root.foregroundMedia.startsWith("qrc:/")) {
+                if (root.foregroundMedia.startsWith("qrc:/")) {
                     return root.foregroundMedia;
                 }
-                return AppContext.getLocalFileUrl(root.foregroundMedia);
+                return AppContext.getImageProviderUrl(root.foregroundMedia);
             }
             fillMode: Image.PreserveAspectFit
             visible: root.foregroundMedia !== "" && root.renderText
@@ -351,7 +351,7 @@ Rectangle {
                             horizontalAlignment: root.getHAlign(elementData.alignment)
                             verticalAlignment: root.getVAlign(elementData.alignment)
                             wrapMode: Text.WordWrap
-                            textFormat: Text.PlainText
+                            textFormat: (elementData.elementId.split("_")[0] === "ShowProgress") ? Text.RichText : Text.PlainText
                             lineHeight: 1.0
                             lineHeightMode: Text.ProportionalHeight
                             renderType: root.textRenderType

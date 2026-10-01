@@ -190,3 +190,25 @@ QUrl AppContext::getLocalFileUrl(const QString& path) const {
         return QUrl::fromLocalFile(Library::mediaDir() + "/" + path);
     }
 }
+
+QUrl AppContext::getImageProviderUrl(const QString& path) const {
+    QUrl localUrl = getLocalFileUrl(path);
+    if (localUrl.isEmpty()) return localUrl;
+    
+    // Check if it's already an image provider URL
+    if (localUrl.scheme() == "image") {
+        return localUrl;
+    }
+    
+    QString lower = localUrl.toString().toLower();
+    if (lower.endsWith(".mp4") || lower.endsWith(".mov") || lower.endsWith(".avi") || lower.endsWith(".mkv") || lower.endsWith(".webm")) {
+        return localUrl; // It's a video, don't use image provider
+    }
+    
+    // If it's a local file, route it to our MediaImageProvider
+    if (localUrl.isLocalFile()) {
+        return QUrl("image://media/" + QUrl::toPercentEncoding(localUrl.toLocalFile()));
+    }
+    
+    return localUrl;
+}

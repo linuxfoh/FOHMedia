@@ -101,6 +101,7 @@ add_library(fohmedia_core STATIC
     src/MediaViewModel.cpp
     inc/AppContext.h
     src/AppContext.cpp
+        src/MediaImageProvider.cpp
     inc/TimerManager.h
     src/TimerManager.cpp
     ${PROTO_SRCS}

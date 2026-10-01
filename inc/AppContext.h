@@ -54,6 +54,7 @@ public:
     MediaViewModel* videoMediaModel() const { return m_videoMediaModel; }
 
     Q_INVOKABLE QUrl getLocalFileUrl(const QString& path) const;
+    Q_INVOKABLE QUrl getImageProviderUrl(const QString& path) const;
 
     Q_INVOKABLE QColor getComponentColor(const QString& name, const QColor& fallbackColor) const;
 

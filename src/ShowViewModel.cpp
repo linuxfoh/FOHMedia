@@ -3,6 +3,7 @@
 #include "../inc/SlideDeck.h"
 #include "../inc/ShowSerializer.h"
 #include "../inc/Library.h"
+#include "../inc/MediaImageProvider.h"
 
 #include <QDir>
 #include <QFile>
@@ -336,6 +337,41 @@ void ShowViewModel::loadShow(const QString& filePath) {
         endInsertRows();
         emit showsChanged();
         emit loadedShowsChanged();
+        
+        // Preload media
+        if (MediaImageProvider::instance()) {
+            auto resolveMediaPath = [](const QString& p) -> QString {
+                if (p.isEmpty()) return "";
+                QString lower = p.toLower();
+                if (lower.endsWith(".mp4") || lower.endsWith(".mov") || lower.endsWith(".avi") || lower.endsWith(".mkv") || lower.endsWith(".webm")) {
+                    return "";
+                }
+                if (p.startsWith("file://")) return QUrl(p).toLocalFile();
+                if (p.startsWith("qrc:/")) return p;
+                if (p.contains("://")) return p;
+                QFileInfo fi(p);
+                if (fi.isAbsolute()) return p;
+                return Library::mediaDir() + "/" + p;
+            };
+
+            for (int i = 0; i < newShow->deckCount(); ++i) {
+                SlideDeck* deck = newShow->deckAt(i);
+                if (deck) {
+                    QString bgMedia = resolveMediaPath(deck->globalBackgroundMedia());
+                    if (!bgMedia.isEmpty()) {
+                        MediaImageProvider::instance()->preloadImage(bgMedia);
+                    }
+                    for (const auto& slides : deck->components()) {
+                        for (const SlideData& slide : slides) {
+                            QString fgMedia = resolveMediaPath(slide.foregroundImage);
+                            if (!fgMedia.isEmpty()) {
+                                MediaImageProvider::instance()->preloadImage(fgMedia);
+                            }
+                        }
+                    }
+                }
+            }
+        }
         
         if (m_activeIndex == -1 && count > 0) {
             setActiveIndex(startRow);

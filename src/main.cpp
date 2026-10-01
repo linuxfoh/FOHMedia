@@ -25,6 +25,7 @@
 #include "LyricsEditorViewModel.h"
 #include "LayoutEditorViewModel.h"
 #include "DisplayEngine.h"
+#include "MediaImageProvider.h"
 
 int main(int argc, char *argv[]) {
     // Enable alpha buffer for transparent QQuickWindow / QQuickView instances
@@ -133,6 +134,7 @@ int main(int argc, char *argv[]) {
     // }
 
     QQmlApplicationEngine qmlEngine;
+    qmlEngine.addImageProvider("media", new MediaImageProvider);
 
     // Create the AppContext and explicitly register it as a singleton.
     // This circumvents the issue where qt_add_qml_module fails to scan QML_ELEMENT 
