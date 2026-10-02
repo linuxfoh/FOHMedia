@@ -845,6 +845,7 @@ Item {
                 id: layoutNameField
                 placeholderText: "Layout Name"
                 Layout.fillWidth: true
+                onAccepted: newLayoutDialog.accept()
             }
             ComboBox {
                 id: layoutTypeCombo
@@ -909,6 +910,7 @@ Item {
                 placeholderText: "New Layout Name"
                 Layout.fillWidth: true
                 text: AppContext.layoutEditorModel.hasActiveLayout ? AppContext.layoutEditorModel.activeLayoutName + " Copy" : ""
+                onAccepted: cloneLayoutDialog.accept()
             }
         }
 

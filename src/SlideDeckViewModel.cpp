@@ -459,12 +459,12 @@ void SlideDeckViewModel::buildActiveSlides() {
     }
 
     // Failsafe so the UI never crashes on an empty deck
-    if (m_slides.isEmpty()) {
-        Slide* slide = new Slide(this, true);
-        slide->setProperty("componentName", "Slide");
-        slide->setProperty("arrangementIndex", 0);
-        m_slides.append(slide);
-    }
+    // if (m_slides.isEmpty()) {
+    //     Slide* slide = new Slide(this, true);
+    //     slide->setProperty("componentName", "Slide");
+    //     slide->setProperty("arrangementIndex", 0);
+    //     m_slides.append(slide);
+    // }
 
     if (hadSelection) {
         int matchedIndex = -1;
@@ -568,11 +568,13 @@ void SlideDeckViewModel::buildActiveSlides() {
 
         if (matchedIndex != -1) {
             m_selectedSlideIndex = matchedIndex;
-        } else {
+        } else if (!m_slides.isEmpty()) {
             m_selectedSlideIndex = qBound(0, prevSelectedIdx, static_cast<int>(m_slides.size()) - 1);
+        } else {
+            m_selectedSlideIndex = -1;
         }
     } else {
-        m_selectedSlideIndex = 0;
+        m_selectedSlideIndex = m_slides.isEmpty() ? -1 : 0;
     }
 
     endResetModel();

@@ -423,6 +423,7 @@ SplitView {
                         Layout.fillWidth: true
                         placeholderText: "e.g., Sunday Morning"
                         onTextEdited: newServiceDialog.hasManualName = true
+                        onAccepted: newServiceDialog.accept()
                     }
                 }
             }

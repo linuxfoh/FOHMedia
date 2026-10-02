@@ -363,6 +363,7 @@ Item {
                 id: renameField
                 Layout.fillWidth: true
                 text: renameDialog.currentName
+                onAccepted: renameDialog.accept()
             }
         }
 

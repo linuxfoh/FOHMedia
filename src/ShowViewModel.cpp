@@ -648,9 +648,6 @@ void ShowViewModel::addBlankDeck(const QString& deckName) {
     SlideDeck* deck = new SlideDeck(safeName, s);
     
     QList<SlideData> slides;
-    SlideData defaultSlide;
-    defaultSlide.lines = {""};
-    slides.append(defaultSlide);
     deck->addComponent("Images", slides);
     
     QStringList order;
