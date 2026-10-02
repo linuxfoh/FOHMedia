@@ -455,6 +455,13 @@ void ShowViewModel::onDeckAdded(int index) {
     } else {
         int flatIndex = flatIndexForShowDeck(senderShow, index);
         emit dataChanged(createIndex(flatIndex, 0), createIndex(flatIndex, 0));
+        
+        // If the active index is pointing to this show, its meaning just changed from "Empty Show" to "First Deck".
+        // Force emit the activeDeckChanged signal so the UI updates.
+        if (m_activeIndex == flatIndex) {
+            emit activeDeckChanged(activeDeck());
+            emit showProgressTextChanged();
+        }
     }
     
     if (auto* deck = senderShow->deckAt(index)) {
@@ -639,7 +646,24 @@ void ShowViewModel::addBlankDeck(const QString& deckName) {
     if (safeName.isEmpty()) safeName = "Images";
 
     SlideDeck* deck = new SlideDeck(safeName, s);
+    
+    QList<SlideData> slides;
+    SlideData defaultSlide;
+    defaultSlide.lines = {""};
+    slides.append(defaultSlide);
+    deck->addComponent("Images", slides);
+    
+    QStringList order;
+    order.append("Images");
+    deck->setComponentOrder(order);
+    
+    Arrangement* arr = deck->appendArrangement("Master");
+    arr->appendComponent("Images");
+    deck->setDefaultArrangement("Master");
+    deck->setActiveArrangement("Master");
+    
     s->addDeck(deck);
+    ShowSerializer::saveShowToFile(s);
     
     // Set active index to this newly added deck (which is at the end of the show)
     int deckIndex = s->deckCount() - 1;

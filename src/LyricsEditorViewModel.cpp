@@ -320,7 +320,33 @@ void LyricsEditorViewModel::importProFiles(const QVariantList& fileUrls) {
 
 void LyricsEditorViewModel::removeLibraryItem(const QString& filename) {
     QString fullPath = QDir(Library::slidedecksDir()).filePath(filename);
+    QString deckName = Library::getDeckTitle(filename);
+    
+    QString safeDeckName = deckName;
+    safeDeckName.replace(QRegularExpression("[^a-zA-Z0-9 -]"), "");
+    if (safeDeckName.isEmpty()) safeDeckName = "Deck";
+
     if (QFile::remove(fullPath)) {
+        bool otherDecksShareName = false;
+        auto decks = Library::listDecksWithTitles();
+        for (const auto& pair : decks) {
+            QString otherSafeName = pair.first;
+            otherSafeName.replace(QRegularExpression("[^a-zA-Z0-9 -]"), "");
+            if (otherSafeName.isEmpty()) otherSafeName = "Deck";
+            
+            if (otherSafeName == safeDeckName) {
+                otherDecksShareName = true;
+                break;
+            }
+        }
+        
+        if (!otherDecksShareName) {
+            QDir deckMediaDir(QDir(Library::mediaDir()).filePath(safeDeckName));
+            if (deckMediaDir.exists()) {
+                deckMediaDir.removeRecursively();
+            }
+        }
+
         refreshLibrary();
     }
 }
