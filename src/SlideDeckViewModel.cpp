@@ -1162,4 +1162,12 @@ void SlideDeckViewModel::addImagesToDeck(const QVariantList& urls) {
     }
     
     m_deck->setComponents(comps);
+    
+    QStringList order = m_deck->componentOrder();
+    if (!order.contains(compName)) {
+        order.append(compName);
+        m_deck->setComponentOrder(order);
+    }
+    
+    saveDeck();
 }
