@@ -1529,6 +1529,7 @@ SplitView {
             DropArea {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                keys: ["text/uri-list"]
                 
                 onEntered: function(drag) {
                     if (drag.hasUrls) {
