@@ -113,6 +113,7 @@ Rectangle {
                 slideLayer.opacity = 1.0;
                 slideLayer.x = 0;
                 slideLayer.y = 0;
+                root.displayedNextSlideText = root.nextSlideText;
                 return;
             }
 
