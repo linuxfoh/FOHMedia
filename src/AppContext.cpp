@@ -135,9 +135,9 @@ AppContext::AppContext(QQmlEngine* engine, QObject* parent) : QObject(parent) {
 
     QObject::connect(m_slideDeckModel, &SlideDeckViewModel::slidesRebuilt, [this]() {
         if (m_showModel->activeDeck()) {
-            m_displayEngine->setGlobalBackgroundMedia(m_showModel->activeDeck()->globalBackgroundMedia());
+            m_displayEngine->setGlobalBackgroundMedia(m_showModel->activeDeck()->globalBackgroundMedia(), false);
         } else {
-            m_displayEngine->setGlobalBackgroundMedia("");
+            m_displayEngine->setGlobalBackgroundMedia("", false);
         }
         if (m_slideDeckModel->isDeckSwitching()) {
             m_displayEngine->setSlidesContent(m_slideDeckModel->toSlideDataList());

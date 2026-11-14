@@ -691,7 +691,75 @@ private slots:
         engine.stop();
         QVERIFY(!engine.isRunning());
     }
+
+    void testVideoDeckSwitchNoFlash() {
+        Show show("Video Transition Test");
+        SlideDeck* deck1 = show.appendDeck("Video Song 1");
+        deck1->setGlobalBackgroundMedia("/tmp/video1.mp4");
+        deck1->addComponent("Intro", {QStringList{""}});
+        deck1->addComponent("Verse 1", {QStringList{"Deck 1 Verse"}});
+        Arrangement* arr1 = deck1->appendArrangement("Default");
+        arr1->setSequence(QStringList{"Intro", "Verse 1"});
+        deck1->setActiveArrangement("Default");
+
+        SlideDeck* deck2 = show.appendDeck("Video Song 2");
+        deck2->setGlobalBackgroundMedia("/tmp/video2.mp4");
+        deck2->addComponent("Intro", {QStringList{""}});
+        deck2->addComponent("Verse 1", {QStringList{"Deck 2 Verse"}});
+        Arrangement* arr2 = deck2->appendArrangement("Default");
+        arr2->setSequence(QStringList{"Intro", "Verse 1"});
+        deck2->setActiveArrangement("Default");
+
+        ShowViewModel showVm(&show);
+        SlideDeckViewModel slideVm;
+        DisplayOptions opts;
+        opts.audienceDelayMs = 273;
+        DisplayEngine engine(opts);
+
+        int bgChangedCount = 0;
+        QObject::connect(&engine, &DisplayEngine::globalBackgroundMediaChanged, [&]() {
+            bgChangedCount++;
+        });
+
+        QObject::connect(&showVm, &ShowViewModel::activeDeckChanged, &slideVm, &SlideDeckViewModel::setDeck);
+        QObject::connect(&slideVm, &SlideDeckViewModel::slidesRebuilt, [&]() {
+            if (showVm.activeDeck()) {
+                engine.setGlobalBackgroundMedia(showVm.activeDeck()->globalBackgroundMedia(), false);
+            } else {
+                engine.setGlobalBackgroundMedia("", false);
+            }
+            if (slideVm.isDeckSwitching()) {
+                engine.setSlidesContent(slideVm.toSlideDataList());
+            } else {
+                engine.updateSlidesContent(slideVm.toSlideDataList());
+            }
+        });
+
+        showVm.setActiveIndex(0);
+        slideVm.setDeck(show.deckAt(0));
+        engine.setGlobalBackgroundMedia(deck1->globalBackgroundMedia(), false);
+        engine.setSlidesContent(slideVm.toSlideDataList());
+        engine.jumpToSlide(1);
+        QCOMPARE(engine.currentSlideText(), QString("Deck 1 Verse"));
+        QCOMPARE(engine.globalBackgroundMedia(), QString("/tmp/video1.mp4"));
+
+        // Switch from Video Song 1 -> Video Song 2
+        bgChangedCount = 0;
+        showVm.setActiveIndex(1);
+        QCOMPARE(bgChangedCount, 1);
+        QCOMPARE(engine.globalBackgroundMedia(), QString("/tmp/video2.mp4"));
+        QCOMPARE(engine.currentSlideNumber(), 1);
+        QCOMPARE(engine.currentSlideText(), QString(""));
+
+        // Verify LiveOutputWindow.qml uses KeepLastFrame and opaque root color for non-transparent layouts
+        QFile qmlFile(QString(QT_TESTCASE_SOURCEDIR) + "/qml/LiveOutputWindow.qml");
+        QVERIFY(qmlFile.open(QIODevice::ReadOnly | QIODevice::Text));
+        QString qmlContent = QString::fromUtf8(qmlFile.readAll());
+        QVERIFY(qmlContent.contains("endOfStreamPolicy: VideoOutput.KeepLastFrame"));
+        QVERIFY(qmlContent.contains("if (root.isTransparentLayout) return \"transparent\""));
+    }
 };
 
 QTEST_MAIN(GUITests)
 #include "GUITests.moc"
+

@@ -6,7 +6,14 @@ import QtMultimedia
 
 Rectangle {
     id: root
-    color: "transparent"
+    color: {
+        if (root.layoutName === "Disabled") return "#000000"
+        if (root.isTransparentLayout) return "transparent"
+        if (root.layoutProps && root.layoutProps.backgroundColor !== undefined) {
+            return root.layoutProps.backgroundColor
+        }
+        return "#000000"
+    }
     focus: true
 
     Component.onCompleted: forceActiveFocus()
@@ -144,6 +151,12 @@ Rectangle {
 
     property bool hasGlobalVideo: root.globalBackgroundMedia !== "" && isVideo(root.globalBackgroundMedia) && !root.isStage && !root.isTransparentLayout && root.layoutName !== "Disabled"
 
+    onHasGlobalVideoChanged: {
+        if (!root.hasGlobalVideo) {
+            backgroundVideo.clearOutput()
+        }
+    }
+
     // Layer 0: Global Background Media (Video)
     MediaPlayer {
         id: backgroundPlayer
@@ -157,6 +170,7 @@ Rectangle {
                 backgroundPlayer.play()
             } else {
                 backgroundPlayer.stop()
+                backgroundVideo.clearOutput()
             }
         }
 
@@ -171,6 +185,7 @@ Rectangle {
         id: backgroundVideo
         anchors.fill: parent
         fillMode: VideoOutput.PreserveAspectCrop
+        endOfStreamPolicy: VideoOutput.KeepLastFrame
         visible: root.hasGlobalVideo
     }
 

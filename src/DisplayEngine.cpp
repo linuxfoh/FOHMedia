@@ -155,11 +155,13 @@ void DisplayEngine::setAudienceDelayMs(int delay) {
     }
 }
 
-void DisplayEngine::setGlobalBackgroundMedia(const QString& media) {
+void DisplayEngine::setGlobalBackgroundMedia(const QString& media, bool updateContext) {
     if (m_globalBackgroundMedia != media) {
         m_globalBackgroundMedia = media;
         emit globalBackgroundMediaChanged();
-        updateQmlContext();
+        if (updateContext) {
+            updateQmlContext();
+        }
     }
 }
 
@@ -583,11 +585,14 @@ void DisplayEngine::updateQmlContext(bool immediate) {
             QQuickItem* root = item.view->rootObject();
             QString curText = root->property("displayedSlideText").toString();
             QString curLayout = root->property("displayedLayoutName").toString();
+            QString curBgMedia = root->property("globalBackgroundMedia").toString();
+            QString curFgMedia = root->property("displayedForegroundMedia").toString();
             QString newText = currentSlide.lines.join("\n");
             QString layoutFile = currentSlide.layouts.value(item.screenName);
             if (layoutFile.isEmpty()) layoutFile = "Default.fohl";
             if (layoutFile.endsWith(".fohl")) layoutFile.chop(5);
-            if (curText != newText || curLayout != layoutFile) {
+            if (curText != newText || curLayout != layoutFile ||
+                curBgMedia != bgMedia || curFgMedia != currentSlide.foregroundImage) {
                 audienceAlreadyMatches = false;
                 break;
             }

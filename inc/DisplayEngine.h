@@ -88,7 +88,7 @@ public:
     void setTransitionDurationMs(int duration);
 
     QString globalBackgroundMedia() const { return m_globalBackgroundMedia; }
-    void setGlobalBackgroundMedia(const QString& media);
+    void setGlobalBackgroundMedia(const QString& media, bool updateContext = true);
 
     void setQmlEngine(QQmlEngine* engine) { m_qmlEngine = engine; }
     void setScreenModel(ScreenModel* model) { m_screenModel = model; }
