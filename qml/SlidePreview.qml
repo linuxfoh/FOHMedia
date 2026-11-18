@@ -158,6 +158,7 @@ Rectangle {
         TextEdit {
             id: textEditItem
             visible: root.renderText && root.quickEditEnabled
+            enabled: root.quickEditEnabled
             x: layoutProps.textBoundsX !== undefined ? layoutProps.textBoundsX : 0
             y: layoutProps.textBoundsY !== undefined ? layoutProps.textBoundsY : 0
             width: layoutProps.textBoundsWidth !== undefined ? layoutProps.textBoundsWidth : layoutContainer.width

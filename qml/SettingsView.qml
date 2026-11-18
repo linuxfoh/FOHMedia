@@ -216,23 +216,132 @@ Item {
             ColumnLayout {
                 anchors.fill: parent
 
-                CheckBox {
+                Switch {
+                    id: disableHWVideoDecodeSwitch
                     text: "Disable Hardware Video Decoding (Requires Restart)"
+                    leftPadding: 10
                     checked: AppContext.settingsManager.disableHwVideo
                     onCheckedChanged: {
                         if (AppContext.settingsManager.disableHwVideo !== checked) {
                             AppContext.settingsManager.disableHwVideo = checked
                         }
                     }
+
+                    indicator: Rectangle {
+                        implicitWidth: 40
+                        implicitHeight: 22
+                        x: disableHWVideoDecodeSwitch.leftPadding
+                        y: parent.height / 2 - height / 2
+                        radius: 11
+                        color: disableHWVideoDecodeSwitch.checked ? palette.highlight : palette.mid
+                        border.color: Qt.darker(color, 1.2)
+                        border.width: 1
+
+                        Rectangle {
+                            x: disableHWVideoDecodeSwitch.checked ? parent.width - width - 2 : 2
+                            y: 2
+                            width: 16
+                            height: 16
+                            radius: 8
+                            color: "white"
+
+                            Behavior on x {
+                                NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+                            }
+                        }
+                    }
+
+                    contentItem: Label {
+                        text: disableHWVideoDecodeSwitch.text
+                        font: disableHWVideoDecodeSwitch.font
+                        verticalAlignment: Text.AlignVCenter
+                        leftPadding: disableHWVideoDecodeSwitch.indicator.width + disableHWVideoDecodeSwitch.spacing
+                    }
                 }
 
-                CheckBox {
+                Switch {
+                    id: disableSplashSwitch
                     text: "Disable Splash Screen"
+                    leftPadding: 10
                     checked: AppContext.settingsManager.disableSplash
                     onCheckedChanged: {
                         if (AppContext.settingsManager.disableSplash !== checked) {
                             AppContext.settingsManager.disableSplash = checked
                         }
+                    }
+
+                    indicator: Rectangle {
+                        implicitWidth: 40
+                        implicitHeight: 22
+                        x: disableSplashSwitch.leftPadding
+                        y: parent.height / 2 - height / 2
+                        radius: 11
+                        color: disableSplashSwitch.checked ? palette.highlight : palette.mid
+                        border.color: Qt.darker(color, 1.2)
+                        border.width: 1
+
+                        Rectangle {
+                            x: disableSplashSwitch.checked ? parent.width - width - 2 : 2
+                            y: 2
+                            width: 16
+                            height: 16
+                            radius: 8
+                            color: "white"
+
+                            Behavior on x {
+                                NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+                            }
+                        }
+                    }
+
+                    contentItem: Label {
+                        text: disableSplashSwitch.text
+                        font: disableSplashSwitch.font
+                        verticalAlignment: Text.AlignVCenter
+                        leftPadding: disableSplashSwitch.indicator.width + disableSplashSwitch.spacing
+                    }
+                }
+
+                Switch {
+                    id: hidePointerSwitch
+                    text: "Hide Pointer"
+                    leftPadding: 10
+                    checked: AppContext.settingsManager.hidePointer
+                    onCheckedChanged: {
+                        if (AppContext.settingsManager.hidePointer !== checked) {
+                            AppContext.settingsManager.hidePointer = checked
+                        }
+                    }
+
+                    indicator: Rectangle {
+                        implicitWidth: 40
+                        implicitHeight: 22
+                        x: hidePointerSwitch.leftPadding
+                        y: parent.height / 2 - height / 2
+                        radius: 11
+                        color: hidePointerSwitch.checked ? palette.highlight : palette.mid
+                        border.color: Qt.darker(color, 1.2)
+                        border.width: 1
+
+                        Rectangle {
+                            x: hidePointerSwitch.checked ? parent.width - width - 2 : 2
+                            y: 2
+                            width: 16
+                            height: 16
+                            radius: 8
+                            color: "white"
+
+                            Behavior on x {
+                                NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+                            }
+                        }
+                    }
+
+                    contentItem: Label {
+                        text: hidePointerSwitch.text
+                        font: hidePointerSwitch.font
+                        verticalAlignment: Text.AlignVCenter
+                        leftPadding: hidePointerSwitch.indicator.width + hidePointerSwitch.spacing
                     }
                 }
             }

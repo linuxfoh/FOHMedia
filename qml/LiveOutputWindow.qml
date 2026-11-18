@@ -16,6 +16,14 @@ Rectangle {
     }
     focus: true
 
+    MouseArea {
+        anchors.fill: parent
+        z: 999999
+        hoverEnabled: true
+        acceptedButtons: Qt.NoButton
+        cursorShape: AppContext.settingsManager.hidePointer ? Qt.BlankCursor : Qt.ArrowCursor
+    }
+
     Component.onCompleted: forceActiveFocus()
 
     Keys.onPressed: (event) => {

@@ -155,6 +155,22 @@ void DisplayEngine::setAudienceDelayMs(int delay) {
     }
 }
 
+void DisplayEngine::setHidePointer(bool hide) {
+    if (m_hidePointer != hide) {
+        m_hidePointer = hide;
+        for (const auto& item : m_screenViews) {
+            if (item.view) {
+                if (m_hidePointer) {
+                    item.view->setCursor(QCursor(Qt::BlankCursor));
+                } else {
+                    item.view->unsetCursor();
+                }
+            }
+        }
+        emit hidePointerChanged();
+    }
+}
+
 void DisplayEngine::setGlobalBackgroundMedia(const QString& media, bool updateContext) {
     if (m_globalBackgroundMedia != media) {
         m_globalBackgroundMedia = media;
@@ -369,6 +385,12 @@ void DisplayEngine::setupView(QQuickView* view, const ScreenConfig& config, bool
         int py = primary ? primary->geometry().y() : 0;
         view->setGeometry(px + 50 + (screenIndex * 30), py + 50 + (screenIndex * 30), config.width, config.height);
         view->show();
+    }
+
+    if (m_hidePointer) {
+        view->setCursor(QCursor(Qt::BlankCursor));
+    } else {
+        view->unsetCursor();
     }
 
     view->setTitle("FOHMedia - " + config.name);

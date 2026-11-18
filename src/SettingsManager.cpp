@@ -29,6 +29,7 @@ void SettingsManager::applyDefaults() {
     m_screensJson = QJsonArray();
     m_disableHwVideo = false;
     m_disableSplash = false;
+    m_hidePointer = true;
     m_activeControllers.clear();
     m_timersJson = QJsonArray();
     m_arrangementPrefix = "<YYYY>-<MM>-<DD> <LEADER-NAME>";
@@ -76,6 +77,9 @@ void SettingsManager::loadSettings() {
         }
         if (root.contains("disableSplash")) {
             setDisableSplash(root["disableSplash"].toBool());
+        }
+        if (root.contains("hidePointer")) {
+            setHidePointer(root["hidePointer"].toBool(true));
         }
         if (root.contains("arrangementPrefix")) {
             setArrangementPrefix(root["arrangementPrefix"].toString());
@@ -139,6 +143,7 @@ void SettingsManager::saveSettings() {
     root["screens"] = m_screensJson;
     root["disableHwVideo"] = m_disableHwVideo;
     root["disableSplash"] = m_disableSplash;
+    root["hidePointer"] = m_hidePointer;
     root["arrangementPrefix"] = m_arrangementPrefix;
     QJsonArray leadersArray;
     for (const QString& name : m_leaderNames) {
@@ -210,6 +215,14 @@ void SettingsManager::setDisableSplash(bool disable) {
     if (m_disableSplash != disable) {
         m_disableSplash = disable;
         emit disableSplashChanged();
+        saveSettings();
+    }
+}
+
+void SettingsManager::setHidePointer(bool hide) {
+    if (m_hidePointer != hide) {
+        m_hidePointer = hide;
+        emit hidePointerChanged();
         saveSettings();
     }
 }

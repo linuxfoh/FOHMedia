@@ -16,6 +16,7 @@ class SettingsManager : public QObject {
     Q_PROPERTY(QVariantList activeControllers READ activeControllers WRITE setActiveControllers NOTIFY activeControllersChanged)
     Q_PROPERTY(bool disableHwVideo READ disableHwVideo WRITE setDisableHwVideo NOTIFY disableHwVideoChanged)
     Q_PROPERTY(bool disableSplash READ disableSplash WRITE setDisableSplash NOTIFY disableSplashChanged)
+    Q_PROPERTY(bool hidePointer READ hidePointer WRITE setHidePointer NOTIFY hidePointerChanged)
     Q_PROPERTY(QString arrangementPrefix READ arrangementPrefix WRITE setArrangementPrefix NOTIFY arrangementPrefixChanged)
     Q_PROPERTY(QStringList leaderNames READ leaderNames WRITE setLeaderNames NOTIFY leaderNamesChanged)
 
@@ -58,6 +59,9 @@ public:
 
     bool disableSplash() const { return m_disableSplash; }
     void setDisableSplash(bool disable);
+
+    bool hidePointer() const { return m_hidePointer; }
+    void setHidePointer(bool hide);
 
     QVariantList activeControllers() const { return m_activeControllers; }
     void setActiveControllers(const QVariantList& controllers);
@@ -128,6 +132,7 @@ signals:
     void activeControllersChanged();
     void disableHwVideoChanged();
     void disableSplashChanged();
+    void hidePointerChanged();
     void arrangementPrefixChanged();
     void leaderNamesChanged();
     void settingsLoaded();
@@ -142,6 +147,7 @@ private:
     QJsonArray m_screensJson;
     bool m_disableHwVideo = false;
     bool m_disableSplash = false;
+    bool m_hidePointer = true;
     QVariantList m_activeControllers;
     QJsonArray m_timersJson;
     QString m_arrangementPrefix;

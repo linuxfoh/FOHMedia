@@ -45,6 +45,7 @@ class DisplayEngine : public QObject {
     Q_PROPERTY(QJsonArray minimapData READ minimapData NOTIFY currentSlideChanged)
 
     Q_PROPERTY(int audienceDelayMs READ audienceDelayMs WRITE setAudienceDelayMs NOTIFY audienceDelayMsChanged)
+    Q_PROPERTY(bool hidePointer READ hidePointer WRITE setHidePointer NOTIFY hidePointerChanged)
     Q_PROPERTY(bool isRunning READ isRunning NOTIFY isRunningChanged)
     Q_PROPERTY(QString transitionType READ transitionType WRITE setTransitionType NOTIFY transitionTypeChanged)
     Q_PROPERTY(int transitionDurationMs READ transitionDurationMs WRITE setTransitionDurationMs NOTIFY transitionDurationMsChanged)
@@ -59,6 +60,9 @@ public:
 
     int audienceDelayMs() const { return m_audienceDelayMs; }
     void setAudienceDelayMs(int delay);
+
+    bool hidePointer() const { return m_hidePointer; }
+    void setHidePointer(bool hide);
 
     bool currentNextAllCaps() const;
     int currentNextAlignment() const;
@@ -133,6 +137,7 @@ signals:
     void transitionDurationMsChanged();
     void globalBackgroundMediaChanged();
     void audienceDelayMsChanged();
+    void hidePointerChanged();
     void advanceSlideRequested();
     void retreatSlideRequested();
 
@@ -160,6 +165,7 @@ private:
     int m_transitionDurationMs = 0;
     QString m_globalBackgroundMedia;
     int m_audienceDelayMs = 273;
+    bool m_hidePointer = true;
     uint64_t m_runGeneration = 0;
     QTimer* m_audienceTimer = nullptr;
 

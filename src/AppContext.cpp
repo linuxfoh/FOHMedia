@@ -100,6 +100,7 @@ AppContext::AppContext(QQmlEngine* engine, QObject* parent) : QObject(parent) {
     opts.screenHeight = 1080;
     opts.audienceDelayMs = m_settingsManager->practiceDelayMs();
     m_displayEngine = new DisplayEngine(opts, this);
+    m_displayEngine->setHidePointer(m_settingsManager->hidePointer());
     m_displayEngine->setQmlEngine(engine);
     m_displayEngine->setScreenModel(m_screenModel);
     m_slideDeckModel->setScreenModel(m_screenModel);
@@ -107,6 +108,11 @@ AppContext::AppContext(QQmlEngine* engine, QObject* parent) : QObject(parent) {
     QObject::connect(m_settingsManager, &SettingsManager::practiceDelayMsChanged, [this]() {
         if (m_displayEngine) {
             m_displayEngine->setAudienceDelayMs(m_settingsManager->practiceDelayMs());
+        }
+    });
+    QObject::connect(m_settingsManager, &SettingsManager::hidePointerChanged, [this]() {
+        if (m_displayEngine) {
+            m_displayEngine->setHidePointer(m_settingsManager->hidePointer());
         }
     });
 
