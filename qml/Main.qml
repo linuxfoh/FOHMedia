@@ -66,48 +66,73 @@ ApplicationWindow {
         return false;
     }
 
+    property double lastSlideStepTimeMs: 0
+    readonly property int slideStepCooldownMs: 90
+
+    function canStepSlide() {
+        let now = Date.now();
+        if (now - window.lastSlideStepTimeMs < window.slideStepCooldownMs) {
+            return false;
+        }
+        window.lastSlideStepTimeMs = now;
+        return true;
+    }
+
     function advanceSlide() {
+        if (!window.canStepSlide()) return;
         if (stackView.currentItem && typeof stackView.currentItem.advanceSlide === "function") {
             stackView.currentItem.advanceSlide();
         } else if (AppContext.displayEngine && AppContext.displayEngine.isRunning) {
             AppContext.displayEngine.advanceSlides(1);
+            if (AppContext.slideDeckModel) {
+                AppContext.slideDeckModel.selectedSlideIndex = AppContext.displayEngine.currentSlideNumber - 1;
+            }
         }
     }
 
     function reverseSlide() {
+        if (!window.canStepSlide()) return;
         if (stackView.currentItem && typeof stackView.currentItem.reverseSlide === "function") {
             stackView.currentItem.reverseSlide();
         } else if (AppContext.displayEngine && AppContext.displayEngine.isRunning) {
             AppContext.displayEngine.retreatSlides(1);
+            if (AppContext.slideDeckModel) {
+                AppContext.slideDeckModel.selectedSlideIndex = AppContext.displayEngine.currentSlideNumber - 1;
+            }
         }
     }
 
     Shortcut {
         sequence: "Space"
+        autoRepeat: false
         enabled: (AppContext.displayEngine && AppContext.displayEngine.isRunning) && !window.isEditingText()
         onActivated: window.advanceSlide()
     }
 
     Shortcut {
         sequence: "Right"
+        autoRepeat: false
         enabled: (AppContext.displayEngine && AppContext.displayEngine.isRunning) && !window.isEditingText()
         onActivated: window.advanceSlide()
     }
 
     Shortcut {
         sequence: "Down"
+        autoRepeat: false
         enabled: (AppContext.displayEngine && AppContext.displayEngine.isRunning) && !window.isEditingText()
         onActivated: window.advanceSlide()
     }
 
     Shortcut {
         sequence: "Left"
+        autoRepeat: false
         enabled: (AppContext.displayEngine && AppContext.displayEngine.isRunning) && !window.isEditingText()
         onActivated: window.reverseSlide()
     }
 
     Shortcut {
         sequence: "Up"
+        autoRepeat: false
         enabled: (AppContext.displayEngine && AppContext.displayEngine.isRunning) && !window.isEditingText()
         onActivated: window.reverseSlide()
     }

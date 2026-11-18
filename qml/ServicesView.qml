@@ -1614,12 +1614,49 @@ SplitView {
                     }
                 }
                 
-                Keys.onSpacePressed: event => { if (!servicesView.isEditingArrangement) { advanceSlide(); event.accepted = true; } }
-                Keys.onRightPressed: event => { if (!servicesView.isEditingArrangement) { advanceSlide(); event.accepted = true; } }
-                Keys.onDownPressed: event => { if (!servicesView.isEditingArrangement) { advanceSlide(); event.accepted = true; } }
-                Keys.onLeftPressed: event => { if (!servicesView.isEditingArrangement) { reverseSlide(); event.accepted = true; } }
-                Keys.onUpPressed: event => { if (!servicesView.isEditingArrangement) { reverseSlide(); event.accepted = true; } }
+                property double lastSlideStepTimeMs: 0
+                readonly property int slideStepCooldownMs: 90
+
+                function canStepSlide() {
+                    let now = Date.now();
+                    if (now - slideGrid.lastSlideStepTimeMs < slideGrid.slideStepCooldownMs) {
+                        return false;
+                    }
+                    slideGrid.lastSlideStepTimeMs = now;
+                    return true;
+                }
+
+                Keys.onSpacePressed: event => {
+                    if (event.isAutoRepeat) { event.accepted = true; return; }
+                    if (AppContext.displayEngine && AppContext.displayEngine.isRunning) return;
+                    if (!servicesView.isEditingArrangement) { advanceSlide(); event.accepted = true; }
+                }
+                Keys.onRightPressed: event => {
+                    if (event.isAutoRepeat) { event.accepted = true; return; }
+                    if (AppContext.displayEngine && AppContext.displayEngine.isRunning) return;
+                    if (!servicesView.isEditingArrangement) { advanceSlide(); event.accepted = true; }
+                }
+                Keys.onDownPressed: event => {
+                    if (event.isAutoRepeat) { event.accepted = true; return; }
+                    if (AppContext.displayEngine && AppContext.displayEngine.isRunning) return;
+                    if (!servicesView.isEditingArrangement) { advanceSlide(); event.accepted = true; }
+                }
+                Keys.onLeftPressed: event => {
+                    if (event.isAutoRepeat) { event.accepted = true; return; }
+                    if (AppContext.displayEngine && AppContext.displayEngine.isRunning) return;
+                    if (!servicesView.isEditingArrangement) { reverseSlide(); event.accepted = true; }
+                }
+                Keys.onUpPressed: event => {
+                    if (event.isAutoRepeat) { event.accepted = true; return; }
+                    if (AppContext.displayEngine && AppContext.displayEngine.isRunning) return;
+                    if (!servicesView.isEditingArrangement) { reverseSlide(); event.accepted = true; }
+                }
                 function advanceSlide() {
+                    if (!slideGrid.canStepSlide()) return;
+                    let baseIndex = AppContext.slideDeckModel.selectedSlideIndex;
+                    if (currentIndex !== baseIndex) {
+                        currentIndex = baseIndex;
+                    }
                     if (currentIndex === -1) {
                         currentIndex = 0;
                         AppContext.displayEngine.jumpToSlide(0);
@@ -1638,6 +1675,11 @@ SplitView {
                 }
                 
                 function reverseSlide() {
+                    if (!slideGrid.canStepSlide()) return;
+                    let baseIndex = AppContext.slideDeckModel.selectedSlideIndex;
+                    if (currentIndex !== baseIndex) {
+                        currentIndex = baseIndex;
+                    }
                     if (currentIndex > 0) {
                         currentIndex--;
                         AppContext.displayEngine.jumpToSlide(currentIndex);

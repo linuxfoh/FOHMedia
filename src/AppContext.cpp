@@ -143,11 +143,17 @@ AppContext::AppContext(QQmlEngine* engine, QObject* parent) : QObject(parent) {
             m_displayEngine->setSlidesContent(m_slideDeckModel->toSlideDataList());
         } else {
             m_displayEngine->updateSlidesContent(m_slideDeckModel->toSlideDataList());
+            if (m_slideDeckModel->slideCount() > 0) {
+                m_slideDeckModel->setSelectedSlideIndex(m_displayEngine->currentSlideNumber() - 1);
+            }
         }
     });
 
     QObject::connect(m_slideDeckModel, &SlideDeckViewModel::slidesUpdated, [this]() {
         m_displayEngine->updateSlidesContent(m_slideDeckModel->toSlideDataList());
+        if (m_slideDeckModel->slideCount() > 0) {
+            m_slideDeckModel->setSelectedSlideIndex(m_displayEngine->currentSlideNumber() - 1);
+        }
     });
 
     // Sync transition settings from ShowViewModel to DisplayEngine

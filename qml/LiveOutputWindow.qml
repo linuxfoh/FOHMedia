@@ -19,6 +19,10 @@ Rectangle {
     Component.onCompleted: forceActiveFocus()
 
     Keys.onPressed: (event) => {
+        if (event.isAutoRepeat) {
+            event.accepted = true
+            return
+        }
         let win = root.Window.window
         if (win) {
             if (event.key === Qt.Key_F) {

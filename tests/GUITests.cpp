@@ -758,6 +758,25 @@ private slots:
         QVERIFY(qmlContent.contains("endOfStreamPolicy: VideoOutput.KeepLastFrame"));
         QVERIFY(qmlContent.contains("if (root.isTransparentLayout) return \"transparent\""));
     }
+
+    void testSlideNavigationNoAutoRepeatAndDebounce() {
+        QFile mainQml(QString(QT_TESTCASE_SOURCEDIR) + "/qml/Main.qml");
+        QVERIFY(mainQml.open(QIODevice::ReadOnly | QIODevice::Text));
+        QString mainContent = QString::fromUtf8(mainQml.readAll());
+        QVERIFY(mainContent.contains("autoRepeat: false"));
+        QVERIFY(mainContent.contains("canStepSlide()"));
+
+        QFile servicesQml(QString(QT_TESTCASE_SOURCEDIR) + "/qml/ServicesView.qml");
+        QVERIFY(servicesQml.open(QIODevice::ReadOnly | QIODevice::Text));
+        QString servicesContent = QString::fromUtf8(servicesQml.readAll());
+        QVERIFY(servicesContent.contains("if (event.isAutoRepeat)"));
+        QVERIFY(servicesContent.contains("slideGrid.canStepSlide()"));
+
+        QFile liveQml(QString(QT_TESTCASE_SOURCEDIR) + "/qml/LiveOutputWindow.qml");
+        QVERIFY(liveQml.open(QIODevice::ReadOnly | QIODevice::Text));
+        QString liveContent = QString::fromUtf8(liveQml.readAll());
+        QVERIFY(liveContent.contains("if (event.isAutoRepeat)"));
+    }
 };
 
 QTEST_MAIN(GUITests)
