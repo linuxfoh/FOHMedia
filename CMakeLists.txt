@@ -120,6 +120,7 @@ target_link_libraries(fohmedia_core PUBLIC
     Qt6::Multimedia
     Qt6::QuickControls2
     protobuf::libprotobuf
+    $<$<PLATFORM_ID:Darwin>:-framework\ ApplicationServices>
 )
 
 if(MSVC)

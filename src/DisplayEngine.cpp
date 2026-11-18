@@ -13,8 +13,13 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QTimer>
+#include <QEvent>
+#include <QCursor>
 #include "../inc/Library.h"
 #include <iostream>
+#ifdef Q_OS_MACOS
+#include <ApplicationServices/ApplicationServices.h>
+#endif
 
 QString DisplayEngine::transitionType() const {
     return m_transitionType;
@@ -167,8 +172,54 @@ void DisplayEngine::setHidePointer(bool hide) {
                 }
             }
         }
+        updateCursorVisibility();
         emit hidePointerChanged();
     }
+}
+
+void DisplayEngine::updateCursorVisibility() {
+    bool shouldHide = false;
+    if (m_running && m_hidePointer) {
+        const QPoint globalPos = QCursor::pos();
+        for (const auto& item : m_screenViews) {
+            if (item.view && item.view->isVisible()) {
+                if (item.view->geometry().contains(globalPos)) {
+                    shouldHide = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (shouldHide && !m_cursorOverridden) {
+        QGuiApplication::setOverrideCursor(QCursor(Qt::BlankCursor));
+#ifdef Q_OS_MACOS
+        CGDisplayHideCursor(kCGDirectMainDisplay);
+#endif
+        m_cursorOverridden = true;
+    } else if (!shouldHide && m_cursorOverridden) {
+        QGuiApplication::restoreOverrideCursor();
+#ifdef Q_OS_MACOS
+        CGDisplayShowCursor(kCGDirectMainDisplay);
+#endif
+        m_cursorOverridden = false;
+    }
+}
+
+bool DisplayEngine::eventFilter(QObject* watched, QEvent* event) {
+    switch (event->type()) {
+        case QEvent::Enter:
+        case QEvent::Leave:
+        case QEvent::MouseMove:
+        case QEvent::HoverEnter:
+        case QEvent::HoverLeave:
+        case QEvent::HoverMove:
+            updateCursorVisibility();
+            break;
+        default:
+            break;
+    }
+    return QObject::eventFilter(watched, event);
 }
 
 void DisplayEngine::setGlobalBackgroundMedia(const QString& media, bool updateContext) {
@@ -189,6 +240,10 @@ DisplayEngine::DisplayEngine(const DisplayOptions& opts, QObject* parent)
     m_audienceTimer = new QTimer(this);
     m_audienceTimer->setSingleShot(true);
     connect(m_audienceTimer, &QTimer::timeout, this, &DisplayEngine::applyAudienceUpdate);
+
+    m_cursorWatchTimer = new QTimer(this);
+    m_cursorWatchTimer->setInterval(30);
+    connect(m_cursorWatchTimer, &QTimer::timeout, this, &DisplayEngine::updateCursorVisibility);
 }
 
 DisplayEngine::~DisplayEngine() {
@@ -392,6 +447,7 @@ void DisplayEngine::setupView(QQuickView* view, const ScreenConfig& config, bool
     } else {
         view->unsetCursor();
     }
+    view->installEventFilter(this);
 
     view->setTitle("FOHMedia - " + config.name);
     view->setResizeMode(QQuickView::SizeRootObjectToView);
@@ -455,6 +511,10 @@ void DisplayEngine::start() {
 
         m_running = true;
         m_runGeneration++;
+        if (m_cursorWatchTimer) {
+            m_cursorWatchTimer->start();
+        }
+        updateCursorVisibility();
         updateQmlContext(true); // Initial display is immediate
         
         emit started();
@@ -470,8 +530,12 @@ void DisplayEngine::stop() {
     if (m_audienceTimer) {
         m_audienceTimer->stop();
     }
+    if (m_cursorWatchTimer) {
+        m_cursorWatchTimer->stop();
+    }
     const bool wasRunning = m_running;
     m_running = false;
+    updateCursorVisibility();
     
     for (auto& item : m_screenViews) {
         if (item.view) {

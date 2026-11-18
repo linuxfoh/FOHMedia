@@ -154,9 +154,12 @@ private:
     void updateQmlContext(bool immediate = false);
     void applyAudienceUpdate();
     void setupView(QQuickView* view, const ScreenConfig& config, bool isStage, int screenIndex = 0);
+    void updateCursorVisibility();
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
     DisplayOptions m_opts;
     bool m_running = false;
+    bool m_cursorOverridden = false;
     
     QList<SlideData> m_deck;
     int m_currentSlideIndex = 0;
@@ -168,6 +171,7 @@ private:
     bool m_hidePointer = true;
     uint64_t m_runGeneration = 0;
     QTimer* m_audienceTimer = nullptr;
+    QTimer* m_cursorWatchTimer = nullptr;
 
     QList<ScreenViewInfo> m_screenViews;
     QQmlEngine* m_qmlEngine = nullptr;
