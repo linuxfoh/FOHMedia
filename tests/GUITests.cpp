@@ -21,6 +21,10 @@
 #include "../inc/VirtualDisplayOutput.h"
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <rhi/qrhi.h>
+#if defined(Q_OS_MACOS)
+#include <IOSurface/IOSurface.h>
+#endif
 
 class GUITests : public QObject {
     Q_OBJECT
@@ -821,6 +825,9 @@ private slots:
     void testVirtualObsDisplayHeadlessEngineAndPipeWireSink() {
         auto sink = VirtualDisplayOutput::createPlatformSink();
         QVERIFY(sink != nullptr);
+#if defined(Q_OS_MACOS) || defined(Q_OS_WIN)
+        QVERIFY(!sink->requiresCpuReadback());
+#endif
         QVERIFY(sink->initialize("OBS Test Stream", 640, 360));
         QVERIFY(sink->isActive());
         QVERIFY(sink->backendDescription().contains("OBS Test Stream"));
@@ -830,6 +837,67 @@ private slots:
         testFrame.fill(Qt::transparent);
         testFrame.setPixelColor(10, 10, QColor(255, 255, 255, 255));
         sink->submitFrame(nullptr, nullptr, testFrame);
+
+#if defined(Q_OS_MACOS)
+        // Verify true zero-copy Metal QRhiTexture -> SyphonMetalServer IOSurface GPU path
+        QRhiMetalInitParams metalParams;
+        std::unique_ptr<QRhi> rhi(QRhi::create(QRhi::Metal, &metalParams));
+        QVERIFY(rhi != nullptr);
+
+        std::unique_ptr<QRhiTexture> rhiTex(rhi->newTexture(
+            QRhiTexture::RGBA8,
+            QSize(640, 360),
+            1,
+            QRhiTexture::RenderTarget | QRhiTexture::UsedAsTransferSource));
+        QVERIFY(rhiTex->create());
+
+        QImage gpuTestImage(640, 360, QImage::Format_RGBA8888_Premultiplied);
+        gpuTestImage.fill(Qt::transparent);
+        gpuTestImage.setPixelColor(10, 10, QColor(0, 255, 0, 255));
+
+        QRhiCommandBuffer* cb = nullptr;
+        QCOMPARE(rhi->beginOffscreenFrame(&cb), QRhi::FrameOpSuccess);
+        QRhiResourceUpdateBatch* u = rhi->nextResourceUpdateBatch();
+        u->uploadTexture(rhiTex.get(), gpuTestImage);
+        cb->resourceUpdate(u);
+        rhi->endOffscreenFrame();
+
+        // Submit with an empty QImage() to prove zero CPU readback is used
+        sink->submitFrame(rhi.get(), rhiTex.get(), QImage());
+        rhi->finish();
+
+        // Parse the IOSurfaceID from backendDescription ("Syphon Metal (FOHMedia - OBS Test Stream, ID <id>)")
+        QString desc = sink->backendDescription();
+        QVERIFY(desc.contains("Syphon Metal"));
+        int idIdx = desc.lastIndexOf("ID ");
+        QVERIFY(idIdx > 0);
+        uint32_t surfaceId = desc.mid(idIdx + 3).chopped(1).toUInt();
+        QVERIFY(surfaceId > 0);
+
+        IOSurfaceRef sharedSurface = IOSurfaceLookup(surfaceId);
+        QVERIFY(sharedSurface != nullptr);
+        QCOMPARE(static_cast<int>(IOSurfaceGetWidth(sharedSurface)), 640);
+        QCOMPARE(static_cast<int>(IOSurfaceGetHeight(sharedSurface)), 360);
+
+        QCOMPARE(IOSurfaceLock(sharedSurface, kIOSurfaceLockReadOnly, nullptr), kIOReturnSuccess);
+        const auto* base = static_cast<const uint8_t*>(IOSurfaceGetBaseAddress(sharedSurface));
+        const size_t stride = IOSurfaceGetBytesPerRow(sharedSurface);
+        QVERIFY(base != nullptr);
+        // Pixel (0, 0) must be transparent (0, 0, 0, 0)
+        QCOMPARE(base[0], uint8_t(0));
+        QCOMPARE(base[1], uint8_t(0));
+        QCOMPARE(base[2], uint8_t(0));
+        QCOMPARE(base[3], uint8_t(0));
+        // Pixel (10, 10) in top-left Metal input lands at row (360 - 1 - 10) = 349 in Syphon's
+        // bottom-left IOSurface convention (flipped:YES), in BGRA8: B=0, G=255, R=0, A=255
+        const uint8_t* p10 = base + (360 - 1 - 10) * stride + 10 * 4;
+        QCOMPARE(p10[0], uint8_t(0));
+        QCOMPARE(p10[1], uint8_t(255));
+        QCOMPARE(p10[2], uint8_t(0));
+        QCOMPARE(p10[3], uint8_t(255));
+        IOSurfaceUnlock(sharedSurface, kIOSurfaceLockReadOnly, nullptr);
+        CFRelease(sharedSurface);
+#endif
 
         sink->shutdown();
         QVERIFY(!sink->isActive());

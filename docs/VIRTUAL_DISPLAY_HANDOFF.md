@@ -79,73 +79,70 @@
 
 ---
 
-## 3. Step 2 Plan: What Needs to Be Done Next on macOS (M5 MacBook Pro) & Windows 11
+## 3. Step 2 Implementation: macOS (M5 MacBook Pro) & Windows 11 Zero-Copy GPU Sinks (Completed & Verified)
 
-Right now, `src/SyphonFrameSink.cpp` (macOS) and `src/SpoutFrameSink.cpp` (Windows 11) have baseline implementations that still rely on `requiresCpuReadback() == true` (reading the texture back to a CPU `QImage` and copying it into the `IOSurface` / `ID3D11Texture2D`).
+Both `src/SyphonFrameSink.cpp` (macOS) and `src/SpoutFrameSink.cpp` (Windows 11) now return `requiresCpuReadback() == false` and perform true zero-copy GPU texture sharing directly from Qt 6's `QRhiTexture` (`QRhi::Metal` on macOS, `QRhi::D3D11` on Windows 11).
 
- furthermore, on **macOS**, OBS Studio's built-in **`Syphon Client`** source discovers Syphon servers via the **Syphon Framework (`Syphon.framework` / `SyphonMetalServer` or `SyphonOpenGLServer`)**, which broadcasts the server description and `IOSurfaceID` over macOS Distributed Notifications / Mach ports (`info.v002.Syphon.ServerAnnounce`, etc.). Simply creating an `IOSurfaceRef` in memory without announcing it via `SyphonServer` / `SyphonMetalServer` will not make it show up in OBS's `Syphon Client` dropdown!
+On **macOS**, OBS Studio's built-in **`Syphon Client`** source discovers Syphon servers via the **Syphon Framework (`SyphonMetalServer`)**, which broadcasts the server description and `IOSurfaceID` over macOS Distributed Notifications and CFMessagePorts (`info.v002.Syphon.ServerAnnounce`, etc.).
 
-### Task 2A: macOS Zero-Copy Metal + Syphon Implementation (`src/SyphonFrameSink.mm` / `CMakeLists.txt`)
+### Task 2A: macOS Zero-Copy Metal + Syphon Implementation (`src/SyphonFrameSink.cpp` / `third_party/Syphon/` / `CMakeLists.txt`) — COMPLETED
 
-On macOS (especially the production **MacBook Pro M5 with macOS 27**), Qt 6's default RHI backend is **Metal** (`QRhi::Metal`).
+On macOS (including the production **MacBook Pro M5 with macOS 27**), Qt 6's default RHI backend is **Metal** (`QRhi::Metal`).
 
 #### 1. How OBS Studio on macOS Captures Virtual Displays
 - Stock OBS Studio on macOS includes a built-in **`Syphon Client`** source out of the box.
 - When you add a **`Syphon Client`** source in OBS, it lists active Syphon servers in the format `[AppName] ServerName` (e.g. `[FOHMedia] Audience`) and has an **`Allow Transparency`** checkbox that preserves full 8-bit alpha!
 
-#### 2. Integrating `Syphon.framework` (Specifically `SyphonMetalServer`)
-- Check if `Syphon.framework` is installed on the Mac (or vendor/fetch the official open-source BSD-licensed `Syphon.framework` from https://github.com/Syphon/Syphon-Framework into `third_party/Syphon.framework` or compile its 5 Objective-C source files directly into `fohmedia_core` on `APPLE`):
-  - Note: Compiling or bundling `Syphon.framework` (`SyphonMetalServer.h/.m`, `SyphonServerBase.h/.m`, `SyphonServerConnectionManager.h/.m`, `SyphonMessaging.h/.m`, `SyphonPrivate.h/.m` — ARC disabled or enabled per file) or linking `Syphon.framework` into `FOHMedia.app/Contents/Frameworks/Syphon.framework` guarantees zero external dependencies for the end user and works seamlessly with `macdeployqt` and `create_dmg`!
-- Rename `src/SyphonFrameSink.cpp` to Objective-C++ (`src/SyphonFrameSink.mm`) on `APPLE` (or compile it as `OBJCXX` in `CMakeLists.txt` via `set_source_files_properties(src/SyphonFrameSink.mm PROPERTIES LANGUAGE OBJCXX)` and link `-framework Metal -framework QuartzCore -framework IOSurface -framework Cocoa`).
+#### 2. Vendored `SyphonMetalServer` (`third_party/Syphon/`)
+- Vendored the BSD-licensed Syphon Metal server/client/directory Objective-C sources into `third_party/Syphon/` and compiled them directly into `fohmedia_core` on `APPLE` (`enable_language(OBJC OBJCXX)`), with an inline Metal shader compiler fallback in `third_party/Syphon/SyphonServerRendererMetal.m` so no external `.framework` or `.metallib` file is required at runtime.
+- `src/SyphonFrameSink.cpp` is compiled as Objective-C++ (`LANGUAGE OBJCXX` with `-fobjc-arc`) on `APPLE` and links `-framework Metal -framework QuartzCore -framework IOSurface -framework Cocoa`.
 
 #### 3. True Zero-Copy Metal GPU Path (`requiresCpuReadback() -> false`)
 In `SyphonFrameSink` on macOS:
-1. Override `bool requiresCpuReadback() const override { return false; }`.
+1. Overrides `bool requiresCpuReadback() const override { return false; }`.
 2. In `submitFrame(QRhi* rhi, QRhiTexture* texture, const QImage& rgbaImage)`:
-   - Extract Qt 6's native Metal handles from `QRhi`:
+   - Extracts Qt 6's native Metal handles (`QRhiMetalNativeHandles`) and `id<MTLTexture>` from `QRhi`:
      ```objc
-     const QRhiMetalNativeHandles* metalHandles =
+     const auto* metalHandles =
          static_cast<const QRhiMetalNativeHandles*>(rhi->nativeHandles());
-     id<MTLDevice> mtlDevice = (__bridge id<MTLDevice>)metalHandles->dev;
-     id<MTLCommandQueue> mtlCmdQueue = (__bridge id<MTLCommandQueue>)metalHandles->cmdQueue;
-     id<MTLTexture> srcTexture = (__bridge id<MTLTexture>)texture->nativeTexture().object;
+     id<MTLDevice> rhiDevice = (metalHandles && metalHandles->dev)
+         ? (__bridge id<MTLDevice>)(__bridge void*)metalHandles->dev
+         : m_mtlDevice;
+     id<MTLCommandQueue> rhiCmdQueue = (metalHandles && metalHandles->cmdQueue)
+         ? (__bridge id<MTLCommandQueue>)(__bridge void*)metalHandles->cmdQueue
+         : m_cmdQueue;
+     id<MTLTexture> srcTexture =
+         (__bridge id<MTLTexture>)reinterpret_cast<void*>(
+             static_cast<uintptr_t>(texture->nativeTexture().object));
      ```
-   - Lazy-initialize `SyphonMetalServer* m_syphonServer`:
+   - Publishes the frame directly on the Metal GPU command queue with **zero CPU readback**:
      ```objc
-     m_syphonServer = [[SyphonMetalServer alloc] initWithName:m_screenName.toNSString()
-                                                       device:mtlDevice
-                                                      options:nil];
-     ```
-   - Publish the frame directly on the Metal GPU command queue with **zero CPU readback**:
-     ```objc
-     id<MTLCommandBuffer> cmdBuf = [mtlCmdQueue commandBuffer];
+     id<MTLCommandBuffer> cmdBuf = [rhiCmdQueue commandBuffer];
      [m_syphonServer publishFrameTexture:srcTexture
                          onCommandBuffer:cmdBuf
                              imageRegion:NSMakeRect(0, 0, m_width, m_height)
-                                 flipped:NO];
+                                 flipped:YES];
      [cmdBuf commit];
+     [cmdBuf waitUntilCompleted];
      ```
-   - **Performance on MacBook Pro M5**:
-     - `requiresCpuReadback()` is `false`, so `VirtualDisplayOutput` **never calls `batch->readBackTexture()`**!
-     - The entire frame stays 100% in Apple Silicon unified GPU memory (`id<MTLTexture>` -> `SyphonMetalServer` `IOSurface`), using **~0.0% CPU** and preserving full 8-bit RGBA transparency.
-   - *(Keep a fallback to the `QImage` path only if `rhi == nullptr` or `texture == nullptr`, e.g., in unit test `testVirtualObsDisplayHeadlessEngineAndPipeWireSink` where `sink->submitFrame(nullptr, nullptr, testFrame)` is called directly with `nullptr` RHI pointers).*
+   - Retains a fallback `QImage` -> `m_fallbackTexture` path when `rhi == nullptr` or `texture == nullptr` for unit tests.
 
 ---
 
-### Task 2B: Windows 11 Zero-Copy D3D11 + Spout2 Implementation (`src/SpoutFrameSink.cpp`)
+### Task 2B: Windows 11 Zero-Copy D3D11 + Spout2 Implementation (`src/SpoutFrameSink.cpp`) — COMPLETED
 
 On Windows 11, Qt 6's default RHI backend is **Direct3D 11** (`QRhi::D3D11`).
 In `src/SpoutFrameSink.cpp`:
-1. Override `bool requiresCpuReadback() const override { return false; }`.
-2. Instead of creating a separate `ID3D11Device` and calling `UpdateSubresource()` from a CPU `QImage`:
-   - Grab Qt's own `ID3D11Device*` and `ID3D11DeviceContext*` from `static_cast<const QRhiD3D11NativeHandles*>(rhi->nativeHandles())` (`dev` and `context`).
-   - Create `m_sharedTexture` (`DXGI_FORMAT_R8G8B8A8_UNORM` or `DXGI_FORMAT_B8G8R8A8_UNORM` matching `texture`, with `D3D11_RESOURCE_MISC_SHARED`) on Qt's `ID3D11Device*`.
-   - Grab Qt's native `ID3D11Texture2D* srcTex = reinterpret_cast<ID3D11Texture2D*>(quintptr(texture->nativeTexture().object))` and copy GPU-to-GPU via:
+1. Overrides `bool requiresCpuReadback() const override { return false; }`.
+2. In `submitFrame(QRhi* rhi, QRhiTexture* texture, const QImage& rgbaImage)`:
+   - Extracts Qt's own `ID3D11Device*` and `ID3D11DeviceContext*` from `static_cast<const QRhiD3D11NativeHandles*>(rhi->nativeHandles())` (`dev` and `context`).
+   - Allocates `m_sharedTexture` (matching `srcDesc.Width`, `srcDesc.Height`, and `srcDesc.Format`, with `D3D11_RESOURCE_MISC_SHARED`) on Qt's `ID3D11Device*` and updates the Spout2 `SpoutSharedTextureInfo` shared memory mapping.
+   - Grabs Qt's native `ID3D11Texture2D* srcTex = reinterpret_cast<ID3D11Texture2D*>(static_cast<uintptr_t>(texture->nativeTexture().object))` and copies GPU-to-GPU via:
      ```cpp
-     d3dContext->CopyResource(m_sharedTexture, srcTex);
-     d3dContext->Flush();
+     qtContext->CopyResource(m_sharedTexture, srcTex);
+     qtContext->Flush();
      ```
-   - *(Keep the standalone `D3D11CreateDevice` + `UpdateSubresource` fallback when `rhi == nullptr` or `texture == nullptr` so the unit test `sink->submitFrame(nullptr, nullptr, testFrame)` continues to pass).*
+   - Retains the standalone `D3D11CreateDevice` + `UpdateSubresource` fallback when `rhi == nullptr` or `texture == nullptr` for unit tests.
 
 ---
 
@@ -157,8 +154,8 @@ In `src/SpoutFrameSink.cpp`:
 | `qml/DisplaysView.qml` | UI configuration for physical vs. `"Virtual Display (OBS)"` screens, custom geometry SpinBoxes, and `OBS Source: FOHMedia - <Name> (RGBA)` badge. |
 | `inc/VirtualDisplayOutput.h` / `src/VirtualDisplayOutput.cpp` | Headless 60 FPS `QQuickRenderControl` + `QRhiTexture` renderer and `IVirtualFrameSink` interface. |
 | `src/PipeWireFrameSink.cpp` | Linux PipeWire (`pw_stream`) backend — completed, tested, and verified at 1080p60 in OBS Studio 32.1.0. |
-| `src/SyphonFrameSink.cpp` | macOS backend — ready to be upgraded in Step 2A to Objective-C++ (`.mm`) using `SyphonMetalServer` + zero-copy Metal `id<MTLTexture>`. |
-| `src/SpoutFrameSink.cpp` | Windows 11 Spout2 DXGI backend — ready to be upgraded in Step 2B to zero-copy `ID3D11DeviceContext::CopyResource` using `QRhiD3D11NativeHandles`. |
+| `src/SyphonFrameSink.cpp` / `third_party/Syphon/` | macOS Objective-C++ (`OBJCXX`) backend using `SyphonMetalServer` + zero-copy Metal `id<MTLTexture>` (`requiresCpuReadback() == false`). |
+| `src/SpoutFrameSink.cpp` | Windows 11 Spout2 DXGI backend using zero-copy `ID3D11DeviceContext::CopyResource` via `QRhiD3D11NativeHandles` (`requiresCpuReadback() == false`). |
 | `inc/DisplayEngine.h` / `src/DisplayEngine.cpp` | Manages active `QQuickView` and `VirtualDisplayOutput` instances, synchronous `checkTransition` invocation, `audienceDelayMs`, and cursor hiding. |
 | `tests/GUITests.cpp` | Unit & GUI tests including `testVirtualObsDisplayScreenModelAndSerialization` and `testVirtualObsDisplayHeadlessEngineAndPipeWireSink`. |
 

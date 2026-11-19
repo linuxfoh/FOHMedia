@@ -26,6 +26,10 @@ endif()
 
 project(FOHMedia)
 
+if(APPLE)
+    enable_language(OBJC OBJCXX)
+endif()
+
 # Set the C++ standard
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -136,8 +140,46 @@ target_link_libraries(fohmedia_core PUBLIC
 )
 
 if(APPLE)
+    set(SYPHON_OBJC_SRCS
+        third_party/Syphon/SyphonServerBase.m
+        third_party/Syphon/SyphonMetalServer.m
+        third_party/Syphon/SyphonServerRendererMetal.m
+        third_party/Syphon/SyphonServerConnectionManager.m
+        third_party/Syphon/SyphonServerDirectory.m
+        third_party/Syphon/SyphonClientBase.m
+        third_party/Syphon/SyphonMetalClient.m
+        third_party/Syphon/SyphonClientConnectionManager.m
+        third_party/Syphon/SyphonMessaging.m
+        third_party/Syphon/SyphonMessageReceiver.m
+        third_party/Syphon/SyphonMessageSender.m
+        third_party/Syphon/SyphonCFMessageReceiver.m
+        third_party/Syphon/SyphonCFMessageSender.m
+        third_party/Syphon/SyphonMessageQueue.m
+        third_party/Syphon/SyphonPrivate.m
+    )
+    target_sources(fohmedia_core PRIVATE
+        ${SYPHON_OBJC_SRCS}
+        third_party/Syphon/SyphonDispatch.c
+    )
+    set_source_files_properties(${SYPHON_OBJC_SRCS} PROPERTIES
+        COMPILE_FLAGS "-fobjc-arc -include \"${CMAKE_CURRENT_SOURCE_DIR}/third_party/Syphon/Syphon_Prefix.pch\" -Wno-deprecated-declarations -Wno-unused-parameter -Wno-sign-conversion -Wno-shorten-64-to-32"
+    )
+    set_source_files_properties(third_party/Syphon/SyphonDispatch.c PROPERTIES
+        COMPILE_FLAGS "-Wno-deprecated-declarations -Wno-unused-parameter -Wno-sign-conversion"
+    )
+    set_source_files_properties(src/SyphonFrameSink.cpp PROPERTIES
+        LANGUAGE OBJCXX
+        COMPILE_FLAGS "-fobjc-arc"
+    )
+    target_include_directories(fohmedia_core PUBLIC
+        third_party
+        third_party/Syphon
+    )
     target_link_libraries(fohmedia_core PUBLIC
         "-framework ApplicationServices"
+        "-framework Cocoa"
+        "-framework Metal"
+        "-framework QuartzCore"
         "-framework IOSurface"
         "-framework CoreVideo"
         "-framework CoreFoundation"
