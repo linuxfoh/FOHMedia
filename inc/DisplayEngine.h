@@ -10,7 +10,9 @@
 
 #include "../inc/SlideDeck.h"
 #include "../inc/SlideLayout.h"
+#include "../inc/VirtualDisplayOutput.h"
 #include <QJsonArray>
+#include <QQuickItem>
 class ScreenModel;
 struct ScreenConfig;
 
@@ -97,6 +99,10 @@ public:
     void setQmlEngine(QQmlEngine* engine) { m_qmlEngine = engine; }
     void setScreenModel(ScreenModel* model) { m_screenModel = model; }
 
+    int activeOutputCount() const { return static_cast<int>(m_screenViews.size()); }
+    int activeVirtualOutputCount() const;
+    VirtualDisplayOutput* virtualOutputForScreen(const QString& screenName) const;
+
 public slots:
     void setPrimaryDisplayIndex(int index) { m_opts.primaryDisplayIndex = index; }
     void setStageDisplayIndex(int index)   { m_opts.stageDisplayIndex = index; }
@@ -149,6 +155,13 @@ private:
     struct ScreenViewInfo {
         QString screenName;
         QPointer<QQuickView> view;
+        std::shared_ptr<VirtualDisplayOutput> virtualOutput;
+
+        QQuickItem* rootObject() const {
+            if (view && view->rootObject()) return view->rootObject();
+            if (virtualOutput && virtualOutput->rootObject()) return virtualOutput->rootObject();
+            return nullptr;
+        }
     };
 
     void updateQmlContext(bool immediate = false);
@@ -160,6 +173,7 @@ private:
     DisplayOptions m_opts;
     bool m_running = false;
     bool m_cursorOverridden = false;
+    QPointer<QQuickView> m_hoveredDisplayView;
     
     QList<SlideData> m_deck;
     int m_currentSlideIndex = 0;

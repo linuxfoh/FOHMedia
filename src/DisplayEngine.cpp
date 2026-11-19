@@ -179,16 +179,8 @@ void DisplayEngine::setHidePointer(bool hide) {
 
 void DisplayEngine::updateCursorVisibility() {
     bool shouldHide = false;
-    if (m_running && m_hidePointer) {
-        const QPoint globalPos = QCursor::pos();
-        for (const auto& item : m_screenViews) {
-            if (item.view && item.view->isVisible()) {
-                if (item.view->geometry().contains(globalPos)) {
-                    shouldHide = true;
-                    break;
-                }
-            }
-        }
+    if (m_running && m_hidePointer && m_hoveredDisplayView && m_hoveredDisplayView->isVisible()) {
+        shouldHide = true;
     }
 
     if (shouldHide && !m_cursorOverridden) {
@@ -207,17 +199,28 @@ void DisplayEngine::updateCursorVisibility() {
 }
 
 bool DisplayEngine::eventFilter(QObject* watched, QEvent* event) {
-    switch (event->type()) {
-        case QEvent::Enter:
-        case QEvent::Leave:
-        case QEvent::MouseMove:
-        case QEvent::HoverEnter:
-        case QEvent::HoverLeave:
-        case QEvent::HoverMove:
-            updateCursorVisibility();
-            break;
-        default:
-            break;
+    QQuickView* view = qobject_cast<QQuickView*>(watched);
+    if (view) {
+        switch (event->type()) {
+            case QEvent::Enter:
+            case QEvent::HoverEnter:
+            case QEvent::MouseMove:
+            case QEvent::HoverMove:
+                m_hoveredDisplayView = view;
+                updateCursorVisibility();
+                break;
+            case QEvent::Leave:
+            case QEvent::HoverLeave:
+            case QEvent::Hide:
+            case QEvent::Close:
+                if (m_hoveredDisplayView == view) {
+                    m_hoveredDisplayView.clear();
+                }
+                updateCursorVisibility();
+                break;
+            default:
+                break;
+        }
     }
     return QObject::eventFilter(watched, event);
 }
@@ -464,19 +467,39 @@ void DisplayEngine::setupView(QQuickView* view, const ScreenConfig& config, bool
     }
 }
 
+int DisplayEngine::activeVirtualOutputCount() const {
+    int count = 0;
+    for (const auto& item : m_screenViews) {
+        if (item.virtualOutput && item.virtualOutput->isRunning()) {
+            count++;
+        }
+    }
+    return count;
+}
+
+VirtualDisplayOutput* DisplayEngine::virtualOutputForScreen(const QString& screenName) const {
+    for (const auto& item : m_screenViews) {
+        if (item.screenName == screenName && item.virtualOutput) {
+            return item.virtualOutput.get();
+        }
+    }
+    return nullptr;
+}
+
 void DisplayEngine::start() {
     if (m_running) return;
 
     try {
         QList<QScreen*> screens = QGuiApplication::screens();
-        if (screens.isEmpty()) {
-            throw std::runtime_error("No displays detected!");
-        }
 
         for (auto& item : m_screenViews) {
             if (item.view) {
                 item.view->close();
                 item.view->deleteLater();
+            }
+            if (item.virtualOutput) {
+                item.virtualOutput->stop();
+                item.virtualOutput.reset();
             }
         }
         m_screenViews.clear();
@@ -497,16 +520,39 @@ void DisplayEngine::start() {
             }
         }
 
+        bool needsPhysicalDisplay = false;
+        for (const auto& cfg : screenConfigs) {
+            if (cfg.hardwareDisplayIndex == -2 || cfg.disabled || cfg.presentationDisabled) continue;
+            if (!cfg.isVirtualObsDisplay()) {
+                needsPhysicalDisplay = true;
+                break;
+            }
+        }
+
+        if (needsPhysicalDisplay && screens.isEmpty()) {
+            throw std::runtime_error("No displays detected!");
+        }
+
         for (int i = 0; i < screenConfigs.size(); ++i) {
             const ScreenConfig& cfg = screenConfigs[i];
             if (cfg.hardwareDisplayIndex == -2 || cfg.disabled || cfg.presentationDisabled) continue; // Disabled screen
 
             bool isStage = (cfg.name.compare("Stage", Qt::CaseInsensitive) == 0);
 
-            QQuickView* view = new QQuickView(m_qmlEngine, nullptr);
-            setupView(view, cfg, isStage, i);
-
-            m_screenViews.append({cfg.name, view});
+            if (cfg.isVirtualObsDisplay()) {
+                auto vOut = std::make_shared<VirtualDisplayOutput>(
+                    m_qmlEngine, cfg.name, cfg.width, cfg.height, isStage, this);
+                if (vOut->start()) {
+                    m_screenViews.append({cfg.name, nullptr, vOut});
+                } else {
+                    std::cerr << "DisplayEngine: Failed to start virtual display output for "
+                              << cfg.name.toStdString() << std::endl;
+                }
+            } else {
+                QQuickView* view = new QQuickView(m_qmlEngine, nullptr);
+                setupView(view, cfg, isStage, i);
+                m_screenViews.append({cfg.name, view, nullptr});
+            }
         }
 
         m_running = true;
@@ -535,12 +581,17 @@ void DisplayEngine::stop() {
     }
     const bool wasRunning = m_running;
     m_running = false;
+    m_hoveredDisplayView.clear();
     updateCursorVisibility();
     
     for (auto& item : m_screenViews) {
         if (item.view) {
             item.view->close();
             item.view->deleteLater();
+        }
+        if (item.virtualOutput) {
+            item.virtualOutput->stop();
+            item.virtualOutput.reset();
         }
     }
     m_screenViews.clear();
@@ -571,13 +622,13 @@ void DisplayEngine::applyAudienceUpdate() {
     const QString bgMedia = m_globalBackgroundMedia;
 
     for (const auto& item : m_screenViews) {
-        if (!item.view || !item.view->rootObject()) continue;
+        QQuickItem* root = item.rootObject();
+        if (!root) continue;
 
         const QString& sName = item.screenName;
         bool isStage = (sName.compare("Stage", Qt::CaseInsensitive) == 0);
         if (isStage) continue; // Stage is updated immediately in updateQmlContext
 
-        QQuickItem* root = item.view->rootObject();
         QString defaultLayout = "Default.fohl";
         QString layoutFile = currentSlide.layouts.value(sName);
         if (layoutFile.isEmpty()) {
@@ -602,6 +653,11 @@ void DisplayEngine::applyAudienceUpdate() {
         root->setProperty("globalBackgroundMedia", bgMedia);
         root->setProperty("foregroundMedia", currentSlide.foregroundImage);
         root->setProperty("currentSlideIndex", slideIdx);
+        QMetaObject::invokeMethod(root, "checkTransition", Qt::DirectConnection);
+
+        if (item.virtualOutput) {
+            item.virtualOutput->renderNextFrame();
+        }
     }
 }
 
@@ -625,9 +681,9 @@ void DisplayEngine::updateQmlContext(bool immediate) {
     const QString bgMedia = m_globalBackgroundMedia;
 
     for (const auto& item : m_screenViews) {
-        if (!item.view || !item.view->rootObject()) continue;
+        QQuickItem* root = item.rootObject();
+        if (!root) continue;
 
-        QQuickItem* root = item.view->rootObject();
         const QString& sName = item.screenName;
         bool isStage = (sName.compare("Stage", Qt::CaseInsensitive) == 0);
 
@@ -657,6 +713,11 @@ void DisplayEngine::updateQmlContext(bool immediate) {
             root->setProperty("globalBackgroundMedia", bgMedia);
             root->setProperty("foregroundMedia", currentSlide.foregroundImage);
             root->setProperty("currentSlideIndex", slideIdx);
+            QMetaObject::invokeMethod(root, "checkTransition", Qt::DirectConnection);
+
+            if (item.virtualOutput) {
+                item.virtualOutput->renderNextFrame();
+            }
         }
     }
 
@@ -666,9 +727,9 @@ void DisplayEngine::updateQmlContext(bool immediate) {
     } else {
         bool audienceAlreadyMatches = true;
         for (const auto& item : m_screenViews) {
-            if (!item.view || !item.view->rootObject()) continue;
+            QQuickItem* root = item.rootObject();
+            if (!root) continue;
             if (item.screenName.compare("Stage", Qt::CaseInsensitive) == 0) continue;
-            QQuickItem* root = item.view->rootObject();
             QString curText = root->property("displayedSlideText").toString();
             QString curLayout = root->property("displayedLayoutName").toString();
             QString curBgMedia = root->property("globalBackgroundMedia").toString();

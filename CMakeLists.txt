@@ -38,8 +38,15 @@ set(CMAKE_AUTORCC ON)
 # SDL2 removed. Qt QML Windows are used for live display output.
 
 # Find Qt6 (fall back to Qt5 if needed)
-find_package(Qt6 REQUIRED COMPONENTS Widgets Test Qml Quick Multimedia QuickControls2)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Test Qml Quick Multimedia QuickControls2 GuiPrivate)
 enable_testing()
+
+if(UNIX AND NOT APPLE)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
+    pkg_check_modules(LIBDRM REQUIRED IMPORTED_TARGET libdrm)
+    pkg_check_modules(GBM REQUIRED IMPORTED_TARGET gbm)
+endif()
 
 # Find Protobuf (prefer CONFIG mode with module compatibility for full Abseil/Protobuf target dependencies)
 set(protobuf_MODULE_COMPATIBLE ON)
@@ -104,6 +111,11 @@ add_library(fohmedia_core STATIC
         src/MediaImageProvider.cpp
     inc/TimerManager.h
     src/TimerManager.cpp
+    inc/VirtualDisplayOutput.h
+    src/VirtualDisplayOutput.cpp
+    src/PipeWireFrameSink.cpp
+    src/SyphonFrameSink.cpp
+    src/SpoutFrameSink.cpp
     ${PROTO_SRCS}
     ${PROTO_HDRS}
 )
@@ -119,9 +131,29 @@ target_link_libraries(fohmedia_core PUBLIC
     Qt6::Quick
     Qt6::Multimedia
     Qt6::QuickControls2
+    Qt6::GuiPrivate
     protobuf::libprotobuf
-    $<$<PLATFORM_ID:Darwin>:-framework\ ApplicationServices>
 )
+
+if(APPLE)
+    target_link_libraries(fohmedia_core PUBLIC
+        "-framework ApplicationServices"
+        "-framework IOSurface"
+        "-framework CoreVideo"
+        "-framework CoreFoundation"
+    )
+elseif(UNIX)
+    target_link_libraries(fohmedia_core PUBLIC
+        PkgConfig::PIPEWIRE
+        PkgConfig::LIBDRM
+        PkgConfig::GBM
+    )
+elseif(WIN32)
+    target_link_libraries(fohmedia_core PUBLIC
+        d3d11
+        dxgi
+    )
+endif()
 
 if(MSVC)
     target_compile_options(fohmedia_core PRIVATE /W4)

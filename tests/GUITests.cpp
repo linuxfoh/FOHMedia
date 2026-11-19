@@ -17,6 +17,10 @@
 #include "../inc/DisplayEngine.h"
 #include "../inc/SettingsManager.h"
 #include "../inc/ProPresenterImporter.h"
+#include "../inc/ScreenModel.h"
+#include "../inc/VirtualDisplayOutput.h"
+#include <QQmlApplicationEngine>
+#include <QQmlContext>
 
 class GUITests : public QObject {
     Q_OBJECT
@@ -776,6 +780,80 @@ private slots:
         QVERIFY(liveQml.open(QIODevice::ReadOnly | QIODevice::Text));
         QString liveContent = QString::fromUtf8(liveQml.readAll());
         QVERIFY(liveContent.contains("if (event.isAutoRepeat)"));
+    }
+
+    void testVirtualObsDisplayScreenModelAndSerialization() {
+        ScreenModel model;
+        QStringList displays = model.getHardwareDisplays();
+        QVERIFY(displays.size() >= 2);
+        QCOMPARE(displays[0], QString("Unassigned"));
+        QCOMPARE(displays[1], QString("Virtual Display (OBS)"));
+
+        // Verify bidirectional ComboBox <-> hardwareDisplayIndex mapping
+        QCOMPARE(model.comboIndexForHardwareDisplay(ScreenConfig::UnassignedDisplay), 0);
+        QCOMPARE(model.comboIndexForHardwareDisplay(ScreenConfig::VirtualObsDisplay), 1);
+        QCOMPARE(model.hardwareDisplayForComboIndex(0), ScreenConfig::UnassignedDisplay);
+        QCOMPARE(model.hardwareDisplayForComboIndex(1), ScreenConfig::VirtualObsDisplay);
+        QCOMPARE(model.hardwareDisplayForComboIndex(2), 0);
+
+        // Add a virtual OBS screen with custom resolution
+        model.addScreen("OBS Overlay");
+        QCOMPARE(model.rowCount(), 1);
+        model.updateScreen(0, "OBS Overlay", ScreenConfig::VirtualObsDisplay, 1920, 1080, false, true, false, false);
+
+        QList<ScreenConfig> screens = model.screens();
+        QCOMPARE(screens.size(), 1);
+        QVERIFY(screens[0].isVirtualObsDisplay());
+        QCOMPARE(screens[0].hardwareDisplayIndex, ScreenConfig::VirtualObsDisplay);
+        QCOMPARE(screens[0].width, 1920);
+        QCOMPARE(screens[0].height, 1080);
+
+        // Verify JSON serialization round-trip preserves VirtualObsDisplay (-3)
+        QJsonObject json = screens[0].toJson();
+        ScreenConfig loaded = ScreenConfig::fromJson(json);
+        QVERIFY(loaded.isVirtualObsDisplay());
+        QCOMPARE(loaded.hardwareDisplayIndex, ScreenConfig::VirtualObsDisplay);
+        QCOMPARE(loaded.name, QString("OBS Overlay"));
+        QCOMPARE(loaded.width, 1920);
+        QCOMPARE(loaded.height, 1080);
+    }
+
+    void testVirtualObsDisplayHeadlessEngineAndPipeWireSink() {
+        auto sink = VirtualDisplayOutput::createPlatformSink();
+        QVERIFY(sink != nullptr);
+        QVERIFY(sink->initialize("OBS Test Stream", 640, 360));
+        QVERIFY(sink->isActive());
+        QVERIFY(sink->backendDescription().contains("OBS Test Stream"));
+
+        // Submit a test RGBA frame with 0-alpha transparent background and opaque text pixel
+        QImage testFrame(640, 360, QImage::Format_RGBA8888_Premultiplied);
+        testFrame.fill(Qt::transparent);
+        testFrame.setPixelColor(10, 10, QColor(255, 255, 255, 255));
+        sink->submitFrame(nullptr, nullptr, testFrame);
+
+        sink->shutdown();
+        QVERIFY(!sink->isActive());
+
+        // Test DisplayEngine starting with a Virtual Display (OBS) screen
+        ScreenModel screenModel;
+        screenModel.addScreen("OBS Lower Third");
+        screenModel.updateScreen(0, "OBS Lower Third", ScreenConfig::VirtualObsDisplay, 640, 360, false, true, false, false);
+
+        DisplayOptions opts;
+        opts.audienceDelayMs = 0;
+        DisplayEngine engine(opts);
+        engine.setScreenModel(&screenModel);
+
+        SlideData slide1;
+        slide1.componentName = "Verse 1";
+        slide1.lines = QStringList{"Virtual OBS Line 1", "Virtual OBS Line 2"};
+        engine.setSlidesContent({slide1});
+
+        // Verify platform sink works cleanly through start/stop lifecycle
+        engine.start();
+        QVERIFY(engine.isRunning());
+        engine.stop();
+        QVERIFY(!engine.isRunning());
     }
 };
 

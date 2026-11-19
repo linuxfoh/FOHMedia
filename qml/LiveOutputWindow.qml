@@ -98,13 +98,22 @@ Rectangle {
 
     property int lastSlideIndex: -1
 
-    onSlideTextChanged: Qt.callLater(checkTransition)
-    onNextSlideTextChanged: Qt.callLater(checkTransition)
-    onLayoutNameChanged: Qt.callLater(checkTransition)
-    onForegroundMediaChanged: Qt.callLater(checkTransition)
-    onCurrentSlideIndexChanged: Qt.callLater(checkTransition)
+    property bool transitionCheckScheduled: false
+    function scheduleCheckTransition() {
+        if (!root.transitionCheckScheduled) {
+            root.transitionCheckScheduled = true
+            Qt.callLater(checkTransition)
+        }
+    }
+
+    onSlideTextChanged: scheduleCheckTransition()
+    onNextSlideTextChanged: scheduleCheckTransition()
+    onLayoutNameChanged: scheduleCheckTransition()
+    onForegroundMediaChanged: scheduleCheckTransition()
+    onCurrentSlideIndexChanged: scheduleCheckTransition()
 
     function checkTransition() {
+        root.transitionCheckScheduled = false
         if (root.lastSlideIndex === -1) {
             root.lastSlideIndex = root.currentSlideIndex;
             root.displayedSlideText = root.slideText;
