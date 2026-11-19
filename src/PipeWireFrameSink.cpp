@@ -33,6 +33,7 @@ struct BufferSlot {
     uint32_t stride = 0;
     bool isDmaBuf = false;
     gbm_bo* bo = nullptr;
+    uint64_t writtenGeneration = 0;
 };
 
 class PipeWireFrameSink final : public IVirtualFrameSink {
@@ -125,15 +126,14 @@ public:
         spa_fraction fps = SPA_FRACTION(60, 1);
 
         const spa_pod* params[2];
-        // Offer two separate SPA_PARAM_EnumFormat pods with single SPA_POD_Id formats (BGRA and RGBA)
-        // because OBS Studio's pipewire-camera-source requires a fixed SPA_POD_Id (not SPA_POD_CHOICE_ENUM_Id)
-        // per EnumFormat entry when populating its Video Format, Resolution, and Frame Rate dropdowns.
+        // Offer SPA_VIDEO_FORMAT_RGBA first so it matches Qt's native QRhiTexture::RGBA8 layout directly
+        // with zero CPU RGBA->BGRA conversion (while still offering BGRA as second choice).
         params[0] = static_cast<const spa_pod*>(spa_pod_builder_add_object(
             &b,
             SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat,
             SPA_FORMAT_mediaType,      SPA_POD_Id(SPA_MEDIA_TYPE_video),
             SPA_FORMAT_mediaSubtype,   SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
-            SPA_FORMAT_VIDEO_format,   SPA_POD_Id(SPA_VIDEO_FORMAT_BGRA),
+            SPA_FORMAT_VIDEO_format,   SPA_POD_Id(SPA_VIDEO_FORMAT_RGBA),
             SPA_FORMAT_VIDEO_size,     SPA_POD_Rectangle(&rect),
             SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction(&fps)
         ));
@@ -142,7 +142,7 @@ public:
             SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat,
             SPA_FORMAT_mediaType,      SPA_POD_Id(SPA_MEDIA_TYPE_video),
             SPA_FORMAT_mediaSubtype,   SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
-            SPA_FORMAT_VIDEO_format,   SPA_POD_Id(SPA_VIDEO_FORMAT_RGBA),
+            SPA_FORMAT_VIDEO_format,   SPA_POD_Id(SPA_VIDEO_FORMAT_BGRA),
             SPA_FORMAT_VIDEO_size,     SPA_POD_Rectangle(&rect),
             SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction(&fps)
         ));
@@ -188,21 +188,11 @@ public:
     void submitFrame(QRhi* /*rhi*/, QRhiTexture* /*texture*/, const QImage& rgbaImage) override {
         if (!m_active || !m_stream || rgbaImage.isNull()) return;
 
-        QImage converted;
-        if (m_negotiatedFormat == SPA_VIDEO_FORMAT_RGBA) {
-            converted = (rgbaImage.format() == QImage::Format_RGBA8888_Premultiplied)
-                ? rgbaImage
-                : rgbaImage.convertToFormat(QImage::Format_RGBA8888_Premultiplied);
-        } else {
-            converted = (rgbaImage.format() == QImage::Format_ARGB32_Premultiplied)
-                ? rgbaImage
-                : rgbaImage.convertToFormat(QImage::Format_ARGB32_Premultiplied);
-        }
-
         {
             QMutexLocker locker(&m_frameMutex);
-            m_latestFrame = converted;
+            m_latestFrame = rgbaImage;
             m_hasFrame = true;
+            m_frameGeneration++;
         }
     }
 
@@ -401,16 +391,37 @@ private:
         spa_data* d = &buf->datas[0];
 
         if (slot && slot->mappedPtr) {
+            const uint32_t dstStride = slot->stride > 0 ? slot->stride : static_cast<uint32_t>(m_width * 4);
             QImage frameCopy;
+            uint64_t gen = 0;
             {
                 QMutexLocker locker(&m_frameMutex);
                 if (m_hasFrame) {
-                    frameCopy = m_latestFrame;
+                    gen = m_frameGeneration;
+                    if (slot->writtenGeneration != gen) {
+                        if (m_convertedGeneration != gen || m_convertedFormat != m_negotiatedFormat) {
+                            if (m_negotiatedFormat == SPA_VIDEO_FORMAT_RGBA) {
+                                m_convertedFrame = (m_latestFrame.format() == QImage::Format_RGBA8888_Premultiplied)
+                                    ? m_latestFrame
+                                    : m_latestFrame.convertToFormat(QImage::Format_RGBA8888_Premultiplied);
+                            } else {
+                                m_convertedFrame = (m_latestFrame.format() == QImage::Format_ARGB32_Premultiplied)
+                                    ? m_latestFrame
+                                    : m_latestFrame.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+                            }
+                            m_convertedGeneration = gen;
+                            m_convertedFormat = m_negotiatedFormat;
+                        }
+                        frameCopy = m_convertedFrame;
+                    }
                 }
             }
 
-            const uint32_t dstStride = slot->stride > 0 ? slot->stride : static_cast<uint32_t>(m_width * 4);
-            if (!frameCopy.isNull()) {
+            if (gen == 0) {
+                if (slot->writtenGeneration == 0) {
+                    std::memset(slot->mappedPtr, 0, slot->mappedSize);
+                }
+            } else if (slot->writtenGeneration != gen && !frameCopy.isNull()) {
                 const int copyRows = std::min(m_height, frameCopy.height());
                 const size_t rowBytes = static_cast<size_t>(std::min(m_width, frameCopy.width())) * 4;
                 auto* dstBase = static_cast<uint8_t*>(slot->mappedPtr);
@@ -423,8 +434,7 @@ private:
                                     rowBytes);
                     }
                 }
-            } else {
-                std::memset(slot->mappedPtr, 0, slot->mappedSize);
+                slot->writtenGeneration = gen;
             }
 
             d->chunk->offset = 0;
@@ -464,6 +474,10 @@ private:
 
     QMutex m_frameMutex;
     QImage m_latestFrame;
+    QImage m_convertedFrame;
+    uint64_t m_frameGeneration = 0;
+    uint64_t m_convertedGeneration = 0;
+    spa_video_format m_convertedFormat = SPA_VIDEO_FORMAT_UNKNOWN;
     bool m_hasFrame = false;
 };
 

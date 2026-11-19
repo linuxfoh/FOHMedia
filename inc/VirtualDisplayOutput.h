@@ -36,6 +36,10 @@ public:
     /// Submit a rendered RGBA/BGRA frame from the Qt RHI pipeline.
     virtual void submitFrame(QRhi* rhi, QRhiTexture* texture, const QImage& rgbaImage) = 0;
 
+    /// Returns true if this sink needs VirtualDisplayOutput to read back the GPU texture to a CPU QImage.
+    /// Zero-copy GPU sinks (macOS Metal/IOSurface, Windows D3D11/Spout2, Linux EGL DMA-BUF) return false.
+    virtual bool requiresCpuReadback() const { return true; }
+
     /// Cleanly tear down the virtual stream/device.
     virtual void shutdown() = 0;
 

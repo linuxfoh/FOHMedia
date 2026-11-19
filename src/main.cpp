@@ -122,6 +122,11 @@ int main(int argc, char *argv[]) {
     if (disableHwVideo) {
         // Disable hardware acceleration for video decoding (fixes DXVA2 initialization errors on Windows VMs)
         qputenv("QT_FFMPEG_DECODING_HW_DEVICE_TYPES", "");
+    } else if (qEnvironmentVariableIsEmpty("QT_FFMPEG_DECODING_HW_DEVICE_TYPES")) {
+#if defined(Q_OS_LINUX)
+        // Prefer modern VA-API / CUDA / DRM / Vulkan hardware video decoding on Linux and skip legacy VDPAU probing
+        qputenv("QT_FFMPEG_DECODING_HW_DEVICE_TYPES", "vaapi,cuda,drm,vulkan");
+#endif
     }
 
     // Optional splash screen (useful if loading takes a moment)

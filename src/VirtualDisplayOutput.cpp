@@ -161,7 +161,12 @@ bool VirtualDisplayOutput::initRhiResources() {
         return false;
     }
 
-    m_quickWindow->setRenderTarget(QQuickRenderTarget::fromRhiRenderTarget(m_renderTarget.get()));
+    QQuickRenderTarget qrt = QQuickRenderTarget::fromRhiRenderTarget(m_renderTarget.get());
+    if (m_rhi->isYUpInFramebuffer()) {
+        // Let the GPU projection matrix render the frame upright so we never do a CPU vertical flip
+        qrt.setMirrorVertically(true);
+    }
+    m_quickWindow->setRenderTarget(qrt);
     return true;
 }
 
@@ -202,28 +207,35 @@ void VirtualDisplayOutput::renderNextFrame(bool forceRender) {
         m_renderControl->sync();
         m_renderControl->render();
 
+        const bool needCpuReadback = (!m_sink || m_sink->requiresCpuReadback());
         QRhiReadbackResult readback;
-        QRhiResourceUpdateBatch* batch = m_rhi->nextResourceUpdateBatch();
-        batch->readBackTexture(QRhiReadbackDescription(m_colorTexture.get()), &readback);
-        m_renderControl->commandBuffer()->resourceUpdate(batch);
+        if (needCpuReadback) {
+            QRhiResourceUpdateBatch* batch = m_rhi->nextResourceUpdateBatch();
+            batch->readBackTexture(QRhiReadbackDescription(m_colorTexture.get()), &readback);
+            m_renderControl->commandBuffer()->resourceUpdate(batch);
+        }
 
         m_renderControl->endFrame();
 
-        if (!readback.data.isEmpty() && readback.pixelSize.width() == m_width && readback.pixelSize.height() == m_height) {
-            QImage img(reinterpret_cast<const uchar*>(readback.data.constData()),
-                       m_width,
-                       m_height,
-                       m_width * 4,
-                       QImage::Format_RGBA8888_Premultiplied);
-            if (m_rhi->isYUpInFramebuffer()) {
-                m_lastFrame = img.flipped(Qt::Vertical);
-            } else {
-                m_lastFrame = img.copy();
-            }
+        if (needCpuReadback && !readback.data.isEmpty() &&
+            readback.pixelSize.width() == m_width && readback.pixelSize.height() == m_height) {
+            // Wrap the QByteArray directly (implicitly shared, zero-copy) instead of copying/flipping 8.3 MB on CPU
+            QByteArray pixelBytes = readback.data;
+            uchar* rawPtr = reinterpret_cast<uchar*>(const_cast<char*>(pixelBytes.constData()));
+            auto* holder = new QByteArray(std::move(pixelBytes));
+            m_lastFrame = QImage(
+                rawPtr,
+                m_width,
+                m_height,
+                m_width * 4,
+                QImage::Format_RGBA8888_Premultiplied,
+                [](void* info) { delete static_cast<QByteArray*>(info); },
+                holder
+            );
         }
         m_renderedFrameCount++;
 
-        if (m_sink && !m_lastFrame.isNull()) {
+        if (m_sink) {
             m_sink->submitFrame(m_rhi, m_colorTexture.get(), m_lastFrame);
         }
     }
