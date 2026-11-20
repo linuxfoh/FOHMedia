@@ -238,18 +238,31 @@ Item {
                                     enabled: !model.disabled
                                     Label { text: "Display:" ; Layout.preferredWidth: 80 }
                                     ComboBox {
+                                        id: displayCombo
                                         Layout.fillWidth: true
                                         model: AppContext.screenModel.getHardwareDisplays()
                                         
                                         Component.onCompleted: {
-                                            currentIndex = screenDelegate.screenModel.hardwareDisplayIndex + 1
+                                            currentIndex = AppContext.screenModel.comboIndexForHardwareDisplay(screenDelegate.screenModel.hardwareDisplayIndex)
+                                        }
+                                        
+                                        Connections {
+                                            target: screenDelegate.screenModel
+                                            function onHardwareDisplayIndexChanged() {
+                                                let expected = AppContext.screenModel.comboIndexForHardwareDisplay(screenDelegate.screenModel.hardwareDisplayIndex)
+                                                if (displayCombo.currentIndex !== expected) {
+                                                    displayCombo.currentIndex = expected
+                                                }
+                                            }
                                         }
                                         
                                         onActivated: function(cbIndex) {
-                                            let hwIndex = cbIndex - 1
+                                            let hwIndex = AppContext.screenModel.hardwareDisplayForComboIndex(cbIndex)
                                             screenDelegate.screenModel.hardwareDisplayIndex = hwIndex
                                             if (hwIndex >= 0) {
                                                 AppContext.screenModel.applyHardwareDisplayGeometry(index, hwIndex)
+                                            } else if (hwIndex === -3) {
+                                                screenDelegate.screenModel.isFullscreen = false
                                             }
                                         }
                                     }
@@ -283,11 +296,20 @@ Item {
                                     CheckBox {
                                         text: "Fullscreen"
                                         checked: model.isFullscreen
+                                        visible: model.hardwareDisplayIndex !== -3
+                                        enabled: model.hardwareDisplayIndex !== -3
                                         onCheckedChanged: {
                                             if (model.isFullscreen !== checked) {
                                                 model.isFullscreen = checked
                                             }
                                         }
+                                    }
+
+                                    Label {
+                                        visible: model.hardwareDisplayIndex === -3
+                                        text: "OBS Source: FOHMedia - " + model.name + " (RGBA)"
+                                        color: palette.highlight
+                                        font.pixelSize: Qt.platform.os === "osx" || Qt.platform.os === "macos" ? 11 : 12
                                     }
                                 }
                             }

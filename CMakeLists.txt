@@ -26,6 +26,10 @@ endif()
 
 project(FOHMedia)
 
+if(APPLE)
+    enable_language(OBJC OBJCXX)
+endif()
+
 # Set the C++ standard
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -38,8 +42,15 @@ set(CMAKE_AUTORCC ON)
 # SDL2 removed. Qt QML Windows are used for live display output.
 
 # Find Qt6 (fall back to Qt5 if needed)
-find_package(Qt6 REQUIRED COMPONENTS Widgets Test Qml Quick Multimedia QuickControls2)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Test Qml Quick Multimedia QuickControls2 GuiPrivate)
 enable_testing()
+
+if(UNIX AND NOT APPLE)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
+    pkg_check_modules(LIBDRM REQUIRED IMPORTED_TARGET libdrm)
+    pkg_check_modules(GBM REQUIRED IMPORTED_TARGET gbm)
+endif()
 
 # Find Protobuf (prefer CONFIG mode with module compatibility for full Abseil/Protobuf target dependencies)
 set(protobuf_MODULE_COMPATIBLE ON)
@@ -104,6 +115,11 @@ add_library(fohmedia_core STATIC
         src/MediaImageProvider.cpp
     inc/TimerManager.h
     src/TimerManager.cpp
+    inc/VirtualDisplayOutput.h
+    src/VirtualDisplayOutput.cpp
+    src/PipeWireFrameSink.cpp
+    src/SyphonFrameSink.cpp
+    src/SpoutFrameSink.cpp
     ${PROTO_SRCS}
     ${PROTO_HDRS}
 )
@@ -119,9 +135,67 @@ target_link_libraries(fohmedia_core PUBLIC
     Qt6::Quick
     Qt6::Multimedia
     Qt6::QuickControls2
+    Qt6::GuiPrivate
     protobuf::libprotobuf
-    $<$<PLATFORM_ID:Darwin>:-framework\ ApplicationServices>
 )
+
+if(APPLE)
+    set(SYPHON_OBJC_SRCS
+        third_party/Syphon/SyphonServerBase.m
+        third_party/Syphon/SyphonMetalServer.m
+        third_party/Syphon/SyphonServerRendererMetal.m
+        third_party/Syphon/SyphonServerConnectionManager.m
+        third_party/Syphon/SyphonServerDirectory.m
+        third_party/Syphon/SyphonClientBase.m
+        third_party/Syphon/SyphonMetalClient.m
+        third_party/Syphon/SyphonClientConnectionManager.m
+        third_party/Syphon/SyphonMessaging.m
+        third_party/Syphon/SyphonMessageReceiver.m
+        third_party/Syphon/SyphonMessageSender.m
+        third_party/Syphon/SyphonCFMessageReceiver.m
+        third_party/Syphon/SyphonCFMessageSender.m
+        third_party/Syphon/SyphonMessageQueue.m
+        third_party/Syphon/SyphonPrivate.m
+    )
+    target_sources(fohmedia_core PRIVATE
+        ${SYPHON_OBJC_SRCS}
+        third_party/Syphon/SyphonDispatch.c
+    )
+    set_source_files_properties(${SYPHON_OBJC_SRCS} PROPERTIES
+        COMPILE_FLAGS "-fobjc-arc -include \"${CMAKE_CURRENT_SOURCE_DIR}/third_party/Syphon/Syphon_Prefix.pch\" -Wno-deprecated-declarations -Wno-unused-parameter -Wno-sign-conversion -Wno-shorten-64-to-32"
+    )
+    set_source_files_properties(third_party/Syphon/SyphonDispatch.c PROPERTIES
+        COMPILE_FLAGS "-Wno-deprecated-declarations -Wno-unused-parameter -Wno-sign-conversion"
+    )
+    set_source_files_properties(src/SyphonFrameSink.cpp PROPERTIES
+        LANGUAGE OBJCXX
+        COMPILE_FLAGS "-fobjc-arc"
+    )
+    target_include_directories(fohmedia_core PUBLIC
+        third_party
+        third_party/Syphon
+    )
+    target_link_libraries(fohmedia_core PUBLIC
+        "-framework ApplicationServices"
+        "-framework Cocoa"
+        "-framework Metal"
+        "-framework QuartzCore"
+        "-framework IOSurface"
+        "-framework CoreVideo"
+        "-framework CoreFoundation"
+    )
+elseif(UNIX)
+    target_link_libraries(fohmedia_core PUBLIC
+        PkgConfig::PIPEWIRE
+        PkgConfig::LIBDRM
+        PkgConfig::GBM
+    )
+elseif(WIN32)
+    target_link_libraries(fohmedia_core PUBLIC
+        d3d11
+        dxgi
+    )
+endif()
 
 if(MSVC)
     target_compile_options(fohmedia_core PRIVATE /W4)

@@ -204,8 +204,8 @@ void ScreenModel::updateScreen(int index, const QString& name, int displayIndex,
 
 QStringList ScreenModel::getHardwareDisplays() const {
     QStringList displayNames;
-    displayNames << "Unassigned"; // Index -1 maps to index 0 in UI? Usually combo box is 0-indexed.
-    // Actually, if we just return a list, index 0 is "Unassigned", index 1 is "Display 1"...
+    displayNames << "Unassigned";            // cbIndex 0 -> hardwareDisplayIndex -1
+    displayNames << "Virtual Display (OBS)"; // cbIndex 1 -> hardwareDisplayIndex -3
     
     const QList<QScreen*> screens = QGuiApplication::screens();
     for (int i = 0; i < screens.size(); ++i) {
@@ -213,6 +213,29 @@ QStringList ScreenModel::getHardwareDisplays() const {
         displayNames << QString("Display %1 (%2x%3)").arg(i + 1).arg(screen->geometry().width()).arg(screen->geometry().height());
     }
     return displayNames;
+}
+
+int ScreenModel::comboIndexForHardwareDisplay(int hardwareDisplayIndex) const {
+    if (hardwareDisplayIndex == ScreenConfig::VirtualObsDisplay) {
+        return 1;
+    }
+    if (hardwareDisplayIndex >= 0) {
+        const QList<QScreen*> screens = QGuiApplication::screens();
+        if (hardwareDisplayIndex < screens.size()) {
+            return hardwareDisplayIndex + 2;
+        }
+    }
+    return 0; // Unassigned (-1) or out-of-range
+}
+
+int ScreenModel::hardwareDisplayForComboIndex(int comboIndex) const {
+    if (comboIndex == 1) {
+        return ScreenConfig::VirtualObsDisplay;
+    }
+    if (comboIndex >= 2) {
+        return comboIndex - 2;
+    }
+    return ScreenConfig::UnassignedDisplay;
 }
 
 void ScreenModel::applyHardwareDisplayGeometry(int screenIndex, int hardwareDisplayIndex) {

@@ -17,6 +17,23 @@
 #include "../inc/DisplayEngine.h"
 #include "../inc/SettingsManager.h"
 #include "../inc/ProPresenterImporter.h"
+#include "../inc/ScreenModel.h"
+#include "../inc/VirtualDisplayOutput.h"
+#include <QQmlApplicationEngine>
+#include <QQmlContext>
+#include <rhi/qrhi.h>
+#if defined(Q_OS_MACOS)
+#include <IOSurface/IOSurface.h>
+#elif defined(Q_OS_WIN)
+#include <QQuickRenderControl>
+#include <QQuickRenderTarget>
+#include <QQuickWindow>
+#include <QQmlComponent>
+#include <rhi/qrhi_platform.h>
+#include <windows.h>
+#include <d3d11.h>
+#include <dxgi.h>
+#endif
 
 class GUITests : public QObject {
     Q_OBJECT
@@ -776,6 +793,394 @@ private slots:
         QVERIFY(liveQml.open(QIODevice::ReadOnly | QIODevice::Text));
         QString liveContent = QString::fromUtf8(liveQml.readAll());
         QVERIFY(liveContent.contains("if (event.isAutoRepeat)"));
+    }
+
+    void testVirtualObsDisplayScreenModelAndSerialization() {
+        ScreenModel model;
+        QStringList displays = model.getHardwareDisplays();
+        QVERIFY(displays.size() >= 2);
+        QCOMPARE(displays[0], QString("Unassigned"));
+        QCOMPARE(displays[1], QString("Virtual Display (OBS)"));
+
+        // Verify bidirectional ComboBox <-> hardwareDisplayIndex mapping
+        QCOMPARE(model.comboIndexForHardwareDisplay(ScreenConfig::UnassignedDisplay), 0);
+        QCOMPARE(model.comboIndexForHardwareDisplay(ScreenConfig::VirtualObsDisplay), 1);
+        QCOMPARE(model.hardwareDisplayForComboIndex(0), ScreenConfig::UnassignedDisplay);
+        QCOMPARE(model.hardwareDisplayForComboIndex(1), ScreenConfig::VirtualObsDisplay);
+        QCOMPARE(model.hardwareDisplayForComboIndex(2), 0);
+
+        // Add a virtual OBS screen with custom resolution
+        model.addScreen("OBS Overlay");
+        QCOMPARE(model.rowCount(), 1);
+        model.updateScreen(0, "OBS Overlay", ScreenConfig::VirtualObsDisplay, 1920, 1080, false, true, false, false);
+
+        QList<ScreenConfig> screens = model.screens();
+        QCOMPARE(screens.size(), 1);
+        QVERIFY(screens[0].isVirtualObsDisplay());
+        QCOMPARE(screens[0].hardwareDisplayIndex, ScreenConfig::VirtualObsDisplay);
+        QCOMPARE(screens[0].width, 1920);
+        QCOMPARE(screens[0].height, 1080);
+
+        // Verify JSON serialization round-trip preserves VirtualObsDisplay (-3)
+        QJsonObject json = screens[0].toJson();
+        ScreenConfig loaded = ScreenConfig::fromJson(json);
+        QVERIFY(loaded.isVirtualObsDisplay());
+        QCOMPARE(loaded.hardwareDisplayIndex, ScreenConfig::VirtualObsDisplay);
+        QCOMPARE(loaded.name, QString("OBS Overlay"));
+        QCOMPARE(loaded.width, 1920);
+        QCOMPARE(loaded.height, 1080);
+    }
+
+    void testVirtualObsDisplayHeadlessEngineAndPipeWireSink() {
+        auto sink = VirtualDisplayOutput::createPlatformSink();
+        QVERIFY(sink != nullptr);
+#if defined(Q_OS_MACOS) || defined(Q_OS_WIN)
+        QVERIFY(!sink->requiresCpuReadback());
+#endif
+        QVERIFY(sink->initialize("OBS Test Stream", 640, 360));
+        QVERIFY(sink->isActive());
+        QVERIFY(sink->backendDescription().contains("OBS Test Stream"));
+
+        // Submit a test RGBA frame with 0-alpha transparent background and opaque text pixel
+        QImage testFrame(640, 360, QImage::Format_RGBA8888_Premultiplied);
+        testFrame.fill(Qt::transparent);
+        testFrame.setPixelColor(10, 10, QColor(255, 255, 255, 255));
+        sink->submitFrame(nullptr, nullptr, testFrame);
+
+#if defined(Q_OS_MACOS)
+        // Verify true zero-copy Metal QRhiTexture -> SyphonMetalServer IOSurface GPU path
+        QRhiMetalInitParams metalParams;
+        std::unique_ptr<QRhi> rhi(QRhi::create(QRhi::Metal, &metalParams));
+        QVERIFY(rhi != nullptr);
+
+        std::unique_ptr<QRhiTexture> rhiTex(rhi->newTexture(
+            QRhiTexture::RGBA8,
+            QSize(640, 360),
+            1,
+            QRhiTexture::RenderTarget | QRhiTexture::UsedAsTransferSource));
+        QVERIFY(rhiTex->create());
+
+        QImage gpuTestImage(640, 360, QImage::Format_RGBA8888_Premultiplied);
+        gpuTestImage.fill(Qt::transparent);
+        gpuTestImage.setPixelColor(10, 10, QColor(0, 255, 0, 255));
+
+        QRhiCommandBuffer* cb = nullptr;
+        QCOMPARE(rhi->beginOffscreenFrame(&cb), QRhi::FrameOpSuccess);
+        QRhiResourceUpdateBatch* u = rhi->nextResourceUpdateBatch();
+        u->uploadTexture(rhiTex.get(), gpuTestImage);
+        cb->resourceUpdate(u);
+        rhi->endOffscreenFrame();
+
+        // Submit with an empty QImage() to prove zero CPU readback is used
+        sink->submitFrame(rhi.get(), rhiTex.get(), QImage());
+        // Wait briefly for the async Metal GPU publish command buffer to complete
+        QTest::qWait(50);
+
+        // Parse the IOSurfaceID from backendDescription ("Syphon Metal (FOHMedia - OBS Test Stream, ID <id>)")
+        QString desc = sink->backendDescription();
+        QVERIFY(desc.contains("Syphon Metal"));
+        int idIdx = desc.lastIndexOf("ID ");
+        QVERIFY(idIdx > 0);
+        uint32_t surfaceId = desc.mid(idIdx + 3).chopped(1).toUInt();
+        QVERIFY(surfaceId > 0);
+
+        IOSurfaceRef sharedSurface = IOSurfaceLookup(surfaceId);
+        QVERIFY(sharedSurface != nullptr);
+        QCOMPARE(static_cast<int>(IOSurfaceGetWidth(sharedSurface)), 640);
+        QCOMPARE(static_cast<int>(IOSurfaceGetHeight(sharedSurface)), 360);
+
+        QCOMPARE(IOSurfaceLock(sharedSurface, kIOSurfaceLockReadOnly, nullptr), kIOReturnSuccess);
+        const auto* base = static_cast<const uint8_t*>(IOSurfaceGetBaseAddress(sharedSurface));
+        const size_t stride = IOSurfaceGetBytesPerRow(sharedSurface);
+        QVERIFY(base != nullptr);
+        // Pixel (0, 0) must be transparent (0, 0, 0, 0)
+        QCOMPARE(base[0], uint8_t(0));
+        QCOMPARE(base[1], uint8_t(0));
+        QCOMPARE(base[2], uint8_t(0));
+        QCOMPARE(base[3], uint8_t(0));
+        // Pixel (10, 10) in top-left Metal input lands at row (360 - 1 - 10) = 349 in Syphon's
+        // bottom-left IOSurface convention (flipped:YES), in BGRA8: B=0, G=255, R=0, A=255
+        const uint8_t* p10 = base + (360 - 1 - 10) * stride + 10 * 4;
+        QCOMPARE(p10[0], uint8_t(0));
+        QCOMPARE(p10[1], uint8_t(255));
+        QCOMPARE(p10[2], uint8_t(0));
+        QCOMPARE(p10[3], uint8_t(255));
+        IOSurfaceUnlock(sharedSurface, kIOSurfaceLockReadOnly, nullptr);
+        CFRelease(sharedSurface);
+#elif defined(Q_OS_WIN)
+        // Verify true zero-copy D3D11 QRhiTexture -> Spout2 DXGI shared texture GPU path
+        QRhiD3D11InitParams d3dParams;
+        std::unique_ptr<QRhi> rhi(QRhi::create(QRhi::D3D11, &d3dParams));
+        QVERIFY(rhi != nullptr);
+
+        std::unique_ptr<QRhiTexture> rhiTex(rhi->newTexture(
+            QRhiTexture::RGBA8,
+            QSize(640, 360),
+            1,
+            QRhiTexture::RenderTarget | QRhiTexture::UsedAsTransferSource));
+        QVERIFY(rhiTex->create());
+
+        QImage gpuTestImage(640, 360, QImage::Format_RGBA8888_Premultiplied);
+        gpuTestImage.fill(Qt::transparent);
+        gpuTestImage.setPixelColor(10, 10, QColor(0, 255, 0, 255));
+
+        QRhiCommandBuffer* cb = nullptr;
+        QCOMPARE(rhi->beginOffscreenFrame(&cb), QRhi::FrameOpSuccess);
+        QRhiResourceUpdateBatch* u = rhi->nextResourceUpdateBatch();
+        u->uploadTexture(rhiTex.get(), gpuTestImage);
+        cb->resourceUpdate(u);
+        rhi->endOffscreenFrame();
+
+        // Submit with an empty QImage() to prove zero CPU readback is used
+        sink->submitFrame(rhi.get(), rhiTex.get(), QImage());
+
+        QString desc = sink->backendDescription();
+        QVERIFY(desc.contains("Spout2 DXGI"));
+        QVERIFY(desc.contains("Handle 0x"));
+
+        // Verify Spout2 SharedTextureInfo shared memory layout and synchronization primitives
+        #pragma pack(push, 1)
+        struct TestSpoutSharedTextureInfo {
+            uint32_t shareHandle;
+            uint32_t width;
+            uint32_t height;
+            uint32_t format;
+            uint32_t usage;
+            uint8_t  description[256];
+            uint32_t partnerId;
+        };
+        #pragma pack(pop)
+
+        HANDLE hInfoMap = OpenFileMappingA(FILE_MAP_READ, FALSE, "FOHMedia - OBS Test Stream");
+        QVERIFY(hInfoMap != nullptr);
+        auto* info = static_cast<const TestSpoutSharedTextureInfo*>(
+            MapViewOfFile(hInfoMap, FILE_MAP_READ, 0, 0, sizeof(TestSpoutSharedTextureInfo)));
+        QVERIFY(info != nullptr);
+        QCOMPARE(info->width, uint32_t(640));
+        QCOMPARE(info->height, uint32_t(360));
+        QCOMPARE(info->format, uint32_t(DXGI_FORMAT_R8G8B8A8_UNORM));
+        QVERIFY(info->shareHandle != 0);
+        HANDLE sharedHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(info->shareHandle));
+        UnmapViewOfFile(info);
+        CloseHandle(hInfoMap);
+
+        // Verify texture access mutex and frame counter semaphore exist and incremented
+        HANDLE hAccessMutex = OpenMutexA(SYNCHRONIZE, FALSE, "FOHMedia - OBS Test Stream_SpoutAccessMutex");
+        QVERIFY(hAccessMutex != nullptr);
+        QCOMPARE(WaitForSingleObject(hAccessMutex, 100), WAIT_OBJECT_0);
+
+        HANDLE hCountSem = OpenSemaphoreA(SYNCHRONIZE | SEMAPHORE_MODIFY_STATE, FALSE, "FOHMedia - OBS Test Stream_Count_Semaphore");
+        QVERIFY(hCountSem != nullptr);
+        LONG prevCount = 0;
+        QCOMPARE(WaitForSingleObject(hCountSem, 0), WAIT_OBJECT_0);
+        QVERIFY(ReleaseSemaphore(hCountSem, 1, &prevCount) != 0);
+        QVERIFY(prevCount >= 1);
+        CloseHandle(hCountSem);
+
+        // Open the DXGI shared handle on a SECOND independent D3D11 device (simulating OBS Studio)
+        ID3D11Device* rxDevice = nullptr;
+        ID3D11DeviceContext* rxContext = nullptr;
+        D3D_FEATURE_LEVEL fl{};
+        HRESULT hr = D3D11CreateDevice(
+            nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+            nullptr, 0, D3D11_SDK_VERSION, &rxDevice, &fl, &rxContext);
+        QVERIFY(SUCCEEDED(hr) && rxDevice && rxContext);
+
+        ID3D11Texture2D* openedTex = nullptr;
+        hr = rxDevice->OpenSharedResource(sharedHandle, __uuidof(ID3D11Texture2D),
+                                          reinterpret_cast<void**>(&openedTex));
+        QVERIFY(SUCCEEDED(hr) && openedTex);
+
+        D3D11_TEXTURE2D_DESC openedDesc{};
+        openedTex->GetDesc(&openedDesc);
+        QCOMPARE(openedDesc.Width, UINT(640));
+        QCOMPARE(openedDesc.Height, UINT(360));
+        QCOMPARE(openedDesc.Format, DXGI_FORMAT_R8G8B8A8_UNORM);
+
+        D3D11_TEXTURE2D_DESC stagingDesc = openedDesc;
+        stagingDesc.Usage = D3D11_USAGE_STAGING;
+        stagingDesc.BindFlags = 0;
+        stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        stagingDesc.MiscFlags = 0;
+
+        ID3D11Texture2D* stagingTex = nullptr;
+        hr = rxDevice->CreateTexture2D(&stagingDesc, nullptr, &stagingTex);
+        QVERIFY(SUCCEEDED(hr) && stagingTex);
+
+        rxContext->CopyResource(stagingTex, openedTex);
+        ReleaseMutex(hAccessMutex);
+        CloseHandle(hAccessMutex);
+
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        hr = rxContext->Map(stagingTex, 0, D3D11_MAP_READ, 0, &mapped);
+        QVERIFY(SUCCEEDED(hr) && mapped.pData);
+
+        const auto* base = static_cast<const uint8_t*>(mapped.pData);
+        // Pixel (0, 0) must be transparent (0, 0, 0, 0)
+        QCOMPARE(base[0], uint8_t(0));
+        QCOMPARE(base[1], uint8_t(0));
+        QCOMPARE(base[2], uint8_t(0));
+        QCOMPARE(base[3], uint8_t(0));
+        // Pixel (10, 10) in top-left D3D11 RGBA8 must be opaque green (R=0, G=255, B=0, A=255)
+        const uint8_t* p10 = base + 10 * mapped.RowPitch + 10 * 4;
+        QCOMPARE(p10[0], uint8_t(0));
+        QCOMPARE(p10[1], uint8_t(255));
+        QCOMPARE(p10[2], uint8_t(0));
+        QCOMPARE(p10[3], uint8_t(255));
+
+        rxContext->Unmap(stagingTex, 0);
+        stagingTex->Release();
+        openedTex->Release();
+        rxContext->Release();
+        rxDevice->Release();
+
+        // Verify multi-sender SpoutSenderNames contiguous compaction on unregister
+        auto sink2 = VirtualDisplayOutput::createPlatformSink();
+        QVERIFY(sink2->initialize("OBS Test Stream 2", 640, 360));
+        sink->shutdown();
+        QVERIFY(!sink->isActive());
+
+        HANDLE hNamesMap = OpenFileMappingA(FILE_MAP_READ, FALSE, "SpoutSenderNames");
+        QVERIFY(hNamesMap != nullptr);
+        auto* namesBuf = static_cast<const char*>(MapViewOfFile(hNamesMap, FILE_MAP_READ, 0, 0, 0));
+        QVERIFY(namesBuf != nullptr);
+        bool foundSecondContiguous = false;
+        for (size_t i = 0; i < 64; ++i) {
+            const char* slot = namesBuf + i * 256;
+            if (slot[0] == '\0') break;
+            if (std::strcmp(slot, "FOHMedia - OBS Test Stream 2") == 0) {
+                foundSecondContiguous = true;
+            }
+            QVERIFY(std::strcmp(slot, "FOHMedia - OBS Test Stream") != 0);
+        }
+        QVERIFY(foundSecondContiguous);
+        UnmapViewOfFile(namesBuf);
+        CloseHandle(hNamesMap);
+
+        // Verify QQuickRenderControl defaults to QRhi::D3D11 on Windows 11 and renders zero-copy into SpoutFrameSink
+        {
+            QQuickRenderControl rc;
+            QQuickWindow rcWindow(&rc);
+            rcWindow.setColor(QColor(0, 0, 0, 0));
+            rcWindow.setGeometry(0, 0, 640, 360);
+            QVERIFY(rc.initialize());
+            QRhi* rcRhi = rc.rhi();
+            QVERIFY(rcRhi != nullptr);
+            QCOMPARE(rcRhi->backend(), QRhi::D3D11);
+
+            std::unique_ptr<QRhiTexture> rcTex(rcRhi->newTexture(
+                QRhiTexture::RGBA8, QSize(640, 360), 1,
+                QRhiTexture::RenderTarget | QRhiTexture::UsedAsTransferSource));
+            QVERIFY(rcTex->create());
+            std::unique_ptr<QRhiRenderBuffer> rcDs(rcRhi->newRenderBuffer(
+                QRhiRenderBuffer::DepthStencil, QSize(640, 360), 1));
+            QVERIFY(rcDs->create());
+            QRhiTextureRenderTargetDescription rtDesc(QRhiColorAttachment(rcTex.get()));
+            rtDesc.setDepthStencilBuffer(rcDs.get());
+            std::unique_ptr<QRhiTextureRenderTarget> rcRt(rcRhi->newTextureRenderTarget(rtDesc));
+            std::unique_ptr<QRhiRenderPassDescriptor> rcRp(rcRt->newCompatibleRenderPassDescriptor());
+            rcRt->setRenderPassDescriptor(rcRp.get());
+            QVERIFY(rcRt->create());
+            rcWindow.setRenderTarget(QQuickRenderTarget::fromRhiRenderTarget(rcRt.get()));
+
+            QQmlEngine qmlEngine;
+            QQmlComponent comp(&qmlEngine);
+            comp.setData("import QtQuick\nRectangle { x: 10; y: 10; width: 20; height: 20; color: '#0000ff' }", QUrl());
+            std::unique_ptr<QQuickItem> item(qobject_cast<QQuickItem*>(comp.create()));
+            QVERIFY(item != nullptr);
+            item->setParentItem(rcWindow.contentItem());
+
+            rc.polishItems();
+            rc.beginFrame();
+            rc.sync();
+            rc.render();
+            rc.endFrame();
+
+            auto rcSink = VirtualDisplayOutput::createPlatformSink();
+            QVERIFY(rcSink->initialize("QQuickRC Test", 640, 360));
+            rcSink->submitFrame(rcRhi, rcTex.get(), QImage());
+
+            HANDLE hRcInfo = OpenFileMappingA(FILE_MAP_READ, FALSE, "FOHMedia - QQuickRC Test");
+            QVERIFY(hRcInfo != nullptr);
+            auto* rcInfo = static_cast<const TestSpoutSharedTextureInfo*>(
+                MapViewOfFile(hRcInfo, FILE_MAP_READ, 0, 0, sizeof(TestSpoutSharedTextureInfo)));
+            QVERIFY(rcInfo != nullptr);
+            QCOMPARE(rcInfo->width, uint32_t(640));
+            QCOMPARE(rcInfo->height, uint32_t(360));
+            QCOMPARE(rcInfo->format, uint32_t(DXGI_FORMAT_R8G8B8A8_UNORM));
+            QVERIFY(rcInfo->shareHandle != 0);
+            HANDLE rcHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(rcInfo->shareHandle));
+            UnmapViewOfFile(rcInfo);
+            CloseHandle(hRcInfo);
+
+            ID3D11Device* verifyDev = nullptr;
+            ID3D11DeviceContext* verifyCtx = nullptr;
+            D3D_FEATURE_LEVEL vfl{};
+            QVERIFY(SUCCEEDED(D3D11CreateDevice(
+                nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                nullptr, 0, D3D11_SDK_VERSION, &verifyDev, &vfl, &verifyCtx)));
+            ID3D11Texture2D* verifyShared = nullptr;
+            QVERIFY(SUCCEEDED(verifyDev->OpenSharedResource(
+                rcHandle, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&verifyShared))));
+            D3D11_TEXTURE2D_DESC vDesc{};
+            verifyShared->GetDesc(&vDesc);
+            vDesc.Usage = D3D11_USAGE_STAGING;
+            vDesc.BindFlags = 0;
+            vDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+            vDesc.MiscFlags = 0;
+            ID3D11Texture2D* verifyStage = nullptr;
+            QVERIFY(SUCCEEDED(verifyDev->CreateTexture2D(&vDesc, nullptr, &verifyStage)));
+            verifyCtx->CopyResource(verifyStage, verifyShared);
+            D3D11_MAPPED_SUBRESOURCE vMap{};
+            QVERIFY(SUCCEEDED(verifyCtx->Map(verifyStage, 0, D3D11_MAP_READ, 0, &vMap)));
+            const auto* vBase = static_cast<const uint8_t*>(vMap.pData);
+            // Corner (0,0) transparent
+            QCOMPARE(vBase[0], uint8_t(0));
+            QCOMPARE(vBase[1], uint8_t(0));
+            QCOMPARE(vBase[2], uint8_t(0));
+            QCOMPARE(vBase[3], uint8_t(0));
+            // Rectangle at (15,15) is opaque blue (R=0, G=0, B=255, A=255)
+            const uint8_t* p15 = vBase + 15 * vMap.RowPitch + 15 * 4;
+            QCOMPARE(p15[0], uint8_t(0));
+            QCOMPARE(p15[1], uint8_t(0));
+            QCOMPARE(p15[2], uint8_t(255));
+            QCOMPARE(p15[3], uint8_t(255));
+            verifyCtx->Unmap(verifyStage, 0);
+            verifyStage->Release();
+            verifyShared->Release();
+            verifyCtx->Release();
+            verifyDev->Release();
+
+            rcSink->shutdown();
+            item.reset();
+        }
+
+        sink2->shutdown();
+#endif
+
+        sink->shutdown();
+        QVERIFY(!sink->isActive());
+
+        // Test DisplayEngine starting with a Virtual Display (OBS) screen
+        ScreenModel screenModel;
+        screenModel.addScreen("OBS Lower Third");
+        screenModel.updateScreen(0, "OBS Lower Third", ScreenConfig::VirtualObsDisplay, 640, 360, false, true, false, false);
+
+        DisplayOptions opts;
+        opts.audienceDelayMs = 0;
+        DisplayEngine engine(opts);
+        engine.setScreenModel(&screenModel);
+
+        SlideData slide1;
+        slide1.componentName = "Verse 1";
+        slide1.lines = QStringList{"Virtual OBS Line 1", "Virtual OBS Line 2"};
+        engine.setSlidesContent({slide1});
+
+        // Verify platform sink works cleanly through start/stop lifecycle
+        engine.start();
+        QVERIFY(engine.isRunning());
+        engine.stop();
+        QVERIFY(!engine.isRunning());
     }
 };
 
