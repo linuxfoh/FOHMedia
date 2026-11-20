@@ -864,7 +864,8 @@ private slots:
 
         // Submit with an empty QImage() to prove zero CPU readback is used
         sink->submitFrame(rhi.get(), rhiTex.get(), QImage());
-        rhi->finish();
+        // Wait briefly for the async Metal GPU publish command buffer to complete
+        QTest::qWait(50);
 
         // Parse the IOSurfaceID from backendDescription ("Syphon Metal (FOHMedia - OBS Test Stream, ID <id>)")
         QString desc = sink->backendDescription();

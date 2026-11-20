@@ -62,6 +62,16 @@ public:
                 return false;
             }
 
+            // Prevent macOS App Nap and timer coalescing when FOHMedia is in the background
+            // or on a different macOS Space (e.g., while OBS is focused).
+            NSActivityOptions activityOpts =
+                NSActivityUserInitiated |
+                NSActivityLatencyCritical |
+                NSActivityAutomaticTerminationDisabled;
+            m_activityToken = [[NSProcessInfo processInfo]
+                beginActivityWithOptions:activityOpts
+                                  reason:@"FOHMedia Virtual Display 60 FPS Syphon Output"];
+
             if (!ensureFallbackTexture()) {
                 shutdown();
                 return false;
@@ -121,7 +131,6 @@ public:
                                                 imageRegion:NSMakeRect(0, 0, m_width, m_height)
                                                     flipped:YES];
                         [cmdBuf commit];
-                        [cmdBuf waitUntilCompleted];
                         updateSurfaceId();
                         return;
                     }
@@ -161,6 +170,10 @@ public:
         @autoreleasepool {
             m_active = false;
             m_surfaceId = 0;
+            if (m_activityToken) {
+                [[NSProcessInfo processInfo] endActivity:m_activityToken];
+                m_activityToken = nil;
+            }
             if (m_syphonServer) {
                 [m_syphonServer stop];
                 m_syphonServer = nil;
@@ -213,6 +226,7 @@ private:
     id<MTLCommandQueue> m_cmdQueue = nil;
     id<MTLTexture> m_fallbackTexture = nil;
     SyphonMetalServer* m_syphonServer = nil;
+    id<NSObject> m_activityToken = nil;
     IOSurfaceID m_surfaceId = 0;
     bool m_active = false;
 };
