@@ -58,6 +58,34 @@ private slots:
         QVERIFY(signalFired);
     }
 
+    void testSettingsManagerServicesZoom() {
+        SettingsManager sm;
+        QCOMPARE(sm.servicesZoom(), 1.0);
+
+        bool signalFired = false;
+        QObject::connect(&sm, &SettingsManager::servicesZoomChanged, [&]() {
+            signalFired = true;
+        });
+
+        sm.setServicesZoom(1.75);
+        QCOMPARE(sm.servicesZoom(), 1.75);
+        QVERIFY(signalFired);
+
+        // Verify persistence across reload
+        SettingsManager smReloaded;
+        smReloaded.loadSettings();
+        QCOMPARE(smReloaded.servicesZoom(), 1.75);
+
+        // Verify clamping to slider bounds [0.5, 2.5]
+        sm.setServicesZoom(0.1);
+        QCOMPARE(sm.servicesZoom(), 0.5);
+        sm.setServicesZoom(5.0);
+        QCOMPARE(sm.servicesZoom(), 2.5);
+
+        // Restore default
+        sm.setServicesZoom(1.0);
+    }
+
     void testDisplayEngineAudienceDelay() {
         DisplayOptions opts;
         QCOMPARE(opts.audienceDelayMs, 273);
