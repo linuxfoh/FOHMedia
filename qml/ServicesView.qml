@@ -1843,7 +1843,10 @@ SplitView {
                     Layout.preferredWidth: 200
                     from: 0.5
                     to: 2.5
-                    value: 1.0 // Base size multiplier
+                    value: AppContext.settingsManager.servicesZoom // Base size multiplier
+                    onMoved: {
+                        AppContext.settingsManager.servicesZoom = value
+                    }
                 }
                 Label {
                     text: Math.round(zoomSlider.value * 100) + "%"

@@ -19,6 +19,7 @@ class SettingsManager : public QObject {
     Q_PROPERTY(bool hidePointer READ hidePointer WRITE setHidePointer NOTIFY hidePointerChanged)
     Q_PROPERTY(QString arrangementPrefix READ arrangementPrefix WRITE setArrangementPrefix NOTIFY arrangementPrefixChanged)
     Q_PROPERTY(QStringList leaderNames READ leaderNames WRITE setLeaderNames NOTIFY leaderNamesChanged)
+    Q_PROPERTY(double servicesZoom READ servicesZoom WRITE setServicesZoom NOTIFY servicesZoomChanged)
 
     // Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY activeLayoutChanged)
     Q_PROPERTY(QColor introComponentColor READ introComponentColor WRITE setIntroComponentColor NOTIFY lyricsColorChanged)
@@ -73,6 +74,9 @@ public:
     void setLeaderNames(const QStringList& names);
     Q_INVOKABLE void addLeaderName(const QString& name);
     Q_INVOKABLE void removeLeaderName(const QString& name);
+
+    double servicesZoom() const { return m_servicesZoom; }
+    void setServicesZoom(double zoom);
 
 
     QJsonArray getTimersJson() const { return m_timersJson; }
@@ -135,6 +139,7 @@ signals:
     void hidePointerChanged();
     void arrangementPrefixChanged();
     void leaderNamesChanged();
+    void servicesZoomChanged();
     void settingsLoaded();
     void lyricsColorChanged();
 
@@ -152,6 +157,7 @@ private:
     QJsonArray m_timersJson;
     QString m_arrangementPrefix;
     QStringList m_leaderNames;
+    double m_servicesZoom = 1.0;
 
     QColor m_introComponentColor = QColor("#BDB76B");
     QColor m_verseComponentColor = QColor("#0072C6");

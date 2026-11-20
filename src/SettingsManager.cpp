@@ -34,6 +34,7 @@ void SettingsManager::applyDefaults() {
     m_timersJson = QJsonArray();
     m_arrangementPrefix = "<YYYY>-<MM>-<DD> <LEADER-NAME>";
     m_leaderNames.clear();
+    m_servicesZoom = 1.0;
 }
 
 void SettingsManager::loadSettings() {
@@ -83,6 +84,9 @@ void SettingsManager::loadSettings() {
         }
         if (root.contains("arrangementPrefix")) {
             setArrangementPrefix(root["arrangementPrefix"].toString());
+        }
+        if (root.contains("servicesZoom") && root["servicesZoom"].isDouble()) {
+            setServicesZoom(root["servicesZoom"].toDouble(1.0));
         }
         if (root.contains("leaderNames") && root["leaderNames"].isArray()) {
             QStringList names;
@@ -145,6 +149,7 @@ void SettingsManager::saveSettings() {
     root["disableSplash"] = m_disableSplash;
     root["hidePointer"] = m_hidePointer;
     root["arrangementPrefix"] = m_arrangementPrefix;
+    root["servicesZoom"] = m_servicesZoom;
     QJsonArray leadersArray;
     for (const QString& name : m_leaderNames) {
         leadersArray.append(name);
@@ -266,6 +271,15 @@ void SettingsManager::addLeaderName(const QString& name) {
 void SettingsManager::removeLeaderName(const QString& name) {
     if (m_leaderNames.removeOne(name)) {
         emit leaderNamesChanged();
+        saveSettings();
+    }
+}
+
+void SettingsManager::setServicesZoom(double zoom) {
+    const double clamped = qBound(0.5, zoom, 2.5);
+    if (!qFuzzyCompare(m_servicesZoom, clamped)) {
+        m_servicesZoom = clamped;
+        emit servicesZoomChanged();
         saveSettings();
     }
 }
